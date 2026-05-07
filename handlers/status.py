@@ -164,6 +164,7 @@ async def build_status_text() -> str:
     known_groups = await _count_collection("known_groups")
     gapproved = await _count_gapproved()
     blacklisted = await _count_collection("blacklisted_users")
+    bot_ping = await _bot_ping_ms(message)
     supported_lines = [f"{i}. {username} : {cmd}" for i, (username, cmd) in enumerate(SUPPORTED_BOTS, start=1)]
     return (
         "♻ BOT DATABASE STATUS\n"
