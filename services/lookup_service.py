@@ -46,7 +46,16 @@ class LookupService:
 
                 # Manual commands search all collections unless the replied/forwarded source resolves a specific collection.
                 source_message = media.source_message
-                collection = resolve_collection(source_message) or (None if manual else default_collection())
+                resolved_collection = resolve_collection(source_message)
+                # Manual lookup searches all collections when source is unknown.
+                # DM auto lookup also searches all collections when source is unknown,
+                # so users can forward/send media to bot DM and still get a result.
+                if resolved_collection:
+                    collection = resolved_collection
+                elif manual or message.chat.type == "private":
+                    collection = None
+                else:
+                    collection = default_collection()
                 output_command = output_command_from_message(source_message, collection)
                 manual_cmd = command_from_text(message.text or message.caption or "")
                 if manual_cmd and collection_from_command(manual_cmd) == collection:
