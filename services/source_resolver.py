@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from aiogram.types import Message
 from config import (
     BOT_SOURCE_COLLECTION,
@@ -11,18 +10,22 @@ from config import (
     settings,
 )
 
-# Manual name lookup commands. /loop is intentionally NOT included.
-MANUAL_COMMANDS = {"/waifu", "/w", ".wa", ".w", "/name", ".name", "/loot", "/bika"}
+# Manual lookup commands. /loop is intentionally NOT included.
+MANUAL_COMMANDS = {"/waifu", "/w", ".wa", ".w", "/name", ".name", "/bika", "/loot"}
 
 USING_RE = re.compile(r"(?:using|use|hint|full)\s*[:：]?\s*(/[a-zA-Z_]+)", re.I)
 CMD_RE = re.compile(r"(^|\s)(/[a-zA-Z_]+)(?=\s|$)")
 
-# Source title/display-name based mapping for forwarded posts.
-# Telegram sometimes shows only "Forwarded from <display name>" without username.
+
+# Telegram forward display title/name based mapping.
+# This fixes forwards where Telegram shows only "Forwarded from <Display Name>"
+# and does not expose username.
 TITLE_SOURCE_COLLECTION = {
     # 1
     "character catcher": "items_character_catcher",
     "character catcher bot": "items_character_catcher",
+    "characters catcher": "items_character_catcher",
+    "characters catcher bot": "items_character_catcher",
 
     # 2
     "character hallow": "items_characters_hallow",
@@ -33,66 +36,55 @@ TITLE_SOURCE_COLLECTION = {
     "hallow uploads": "items_characters_hallow",
 
     # 3
-    "capture character": "items_capture_character",
     "character capture": "items_capture_character",
     "character capture bot": "items_capture_character",
+    "capture character": "items_capture_character",
+    "capture character bot": "items_capture_character",
     "capture database": "items_capture_character",
 
-    # 4
+    # 4 / 14 share seizer collection
     "character seize": "items_character_seizer",
     "character seize bot": "items_character_seizer",
     "character seizer": "items_character_seizer",
     "character seizer bot": "items_character_seizer",
     "seizer database": "items_character_seizer",
-
-    # 5
-    "husbando grabber": "items_husbando_grabber",
-    "husbando grabber bot": "items_husbando_grabber",
-
-    # 6
-    "grab your waifu": "items_grab_your_waifu",
-    "grab your waifu bot": "items_grab_your_waifu",
-
-    # 7
-    "grab your husbando": "items_grab_your_husbando",
-    "grab your husbando bot": "items_grab_your_husbando",
-
-    # 8
-    "takers": "items_takers_character",
-    "takers bot": "items_takers_character",
-    "takers character": "items_takers_character",
-    "takers character bot": "items_takers_character",
-
-    # 9
-    "catch your husbando": "items_catch_your_husbando",
-    "catch your husbando bot": "items_catch_your_husbando",
-
-    # 10
-    "smash character": "items_smash_character",
-    "smash character bot": "items_smash_character",
-    "smash your character": "items_smash_character",
-    "smash your character bot": "items_smash_character",
-
-    # 11
-    "grab garden": "items_waifux_grab",
-    "waifux grab": "items_waifux_grab",
-    "waifux grab bot": "items_waifux_grab",
-    "waifuxgrab": "items_waifux_grab",
-    "waifuxgrabbot": "items_waifux_grab",
-
-    # 12
-    "catch your waifu": "items_catch_your_waifu",
-    "catch your waifu bot": "items_catch_your_waifu",
-
-    # 13
-    "waifu grabber": "items_waifu_grabber",
-    "waifu grabber bot": "items_waifu_grabber",
-
-    # 14: uses Seizer DB but output command is /loot
     "character loot": "items_character_seizer",
     "character loot bot": "items_character_seizer",
     "character looter": "items_character_seizer",
     "character looter bot": "items_character_seizer",
+
+    # 5: normal + fancy Telegram title variants
+    "husbando grabber": "items_husbando_grabber",
+    "husbando grabber bot": "items_husbando_grabber",
+    "ʜᴜsʙᴀɴᴅᴏ ɢʀᴀʙʙᴇʀ": "items_husbando_grabber",
+    "ʜᴜsʙᴀɴᴅᴏ ɢʀᴀʙʙᴇʀ ʙᴏᴛ": "items_husbando_grabber",
+
+    # 6-7
+    "grab your waifu": "items_grab_your_waifu",
+    "grab your waifu bot": "items_grab_your_waifu",
+    "grab your husbando": "items_grab_your_husbando",
+    "grab your husbando bot": "items_grab_your_husbando",
+
+    # 8-13
+    "takers bot": "items_takers_character",
+    "takers character": "items_takers_character",
+    "takers character bot": "items_takers_character",
+    "catch your husbando": "items_catch_your_husbando",
+    "catch your husbando bot": "items_catch_your_husbando",
+    "smash your character": "items_smash_character",
+    "smash your character bot": "items_smash_character",
+    "smash character": "items_smash_character",
+    "smash character bot": "items_smash_character",
+    "grab garden": "items_waifux_grab",
+    "waifux grab": "items_waifux_grab",
+    "waifuxgrab": "items_waifux_grab",
+    "waifux grab bot": "items_waifux_grab",
+    "catch your waifu": "items_catch_your_waifu",
+    "catch your waifu bot": "items_catch_your_waifu",
+    "waifu grabber": "items_waifu_grabber",
+    "waifu grabber bot": "items_waifu_grabber",
+    "ᴡᴀɪғᴜ ɢʀᴀʙʙᴇʀ": "items_waifu_grabber",
+    "ᴡᴀɪғᴜ ɢʀᴀʙʙᴇʀ ʙᴏᴛ": "items_waifu_grabber",
 }
 
 TITLE_OUTPUT_COMMAND = {
@@ -102,21 +94,14 @@ TITLE_OUTPUT_COMMAND = {
     "character looter bot": "/loot",
 }
 
-_SMALL_CAPS = str.maketrans({
-    "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ғ": "f", "ɢ": "g",
-    "ʜ": "h", "ɪ": "i", "ᴊ": "j", "ᴋ": "k", "ʟ": "l", "ᴍ": "m", "ɴ": "n",
-    "ᴏ": "o", "ᴘ": "p", "ǫ": "q", "ʀ": "r", "s": "s", "ᴛ": "t", "ᴜ": "u",
-    "ᴠ": "v", "ᴡ": "w", "x": "x", "ʏ": "y", "ᴢ": "z",
-})
-
 
 def _clean_title(s: str | None) -> str:
     if not s:
         return ""
-    s = unicodedata.normalize("NFKC", str(s)).translate(_SMALL_CAPS).lower().strip()
+    s = str(s).lower().strip()
     s = s.replace("_", " ")
-    # Drop decorative brackets/emojis/punctuation while keeping words.
-    s = re.sub(r"[^a-z0-9]+", " ", s)
+    # Remove decorative brackets/quotes but keep unicode small-caps text.
+    s = re.sub(r"[『』「」'\"`´|•·。、,;:!¡?¿()\[\]{}<>]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
@@ -127,8 +112,7 @@ def _title_to_collection(title: str | None) -> str | None:
         return None
     if t in TITLE_SOURCE_COLLECTION:
         return TITLE_SOURCE_COLLECTION[t]
-    # Prefer longer keys first to avoid generic partial mismatches.
-    for key, col in sorted(TITLE_SOURCE_COLLECTION.items(), key=lambda kv: len(kv[0]), reverse=True):
+    for key, col in TITLE_SOURCE_COLLECTION.items():
         if key in t:
             return col
     return None
@@ -140,7 +124,7 @@ def _title_to_output_command(title: str | None) -> str | None:
         return None
     if t in TITLE_OUTPUT_COMMAND:
         return TITLE_OUTPUT_COMMAND[t]
-    for key, cmd in sorted(TITLE_OUTPUT_COMMAND.items(), key=lambda kv: len(kv[0]), reverse=True):
+    for key, cmd in TITLE_OUTPUT_COMMAND.items():
         if key in t:
             return cmd
     return None
@@ -176,27 +160,24 @@ def _normalize_username(username: str | None) -> str | None:
 def source_username(message: Message) -> str | None:
     origin = getattr(message, "forward_origin", None)
 
-    # Forwarded from public channel/chat.
     chat = getattr(origin, "chat", None) if origin else None
     username = getattr(chat, "username", None) if chat else None
     if username:
         return _normalize_username(username)
 
-    # Forwarded from user/bot.
     sender_user = getattr(origin, "sender_user", None) if origin else None
     username = getattr(sender_user, "username", None) if sender_user else None
     if username:
         return _normalize_username(username)
 
-    # Inline bot.
     if message.via_bot and message.via_bot.username:
         return _normalize_username(message.via_bot.username)
 
-    # Direct bot post in group/support group.
+    # Source bots posting directly in group.
     if message.from_user and message.from_user.is_bot and message.from_user.username:
         return _normalize_username(message.from_user.username)
 
-    # Legacy fields.
+    # Legacy aiogram/Telegram fields.
     fchat = getattr(message, "forward_from_chat", None)
     if fchat and getattr(fchat, "username", None):
         return _normalize_username(fchat.username)
@@ -239,15 +220,6 @@ def source_title(message: Message) -> str | None:
         if full_name:
             return full_name
         first_name = getattr(fuser, "first_name", None)
-        if first_name:
-            return first_name
-
-    # For direct bot posts, use the display name as a title fallback.
-    if message.from_user and message.from_user.is_bot:
-        full_name = getattr(message.from_user, "full_name", None)
-        if full_name:
-            return full_name
-        first_name = getattr(message.from_user, "first_name", None)
         if first_name:
             return first_name
 
