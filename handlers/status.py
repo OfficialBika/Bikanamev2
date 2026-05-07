@@ -159,13 +159,19 @@ def _ram_info() -> tuple[str, str, str]:
         return "N/A", "N/A", "N/A"
 
 
-async def build_status_text() -> str:
+async def build_status_text(message: Message) -> str:
+    # Public /status: keep it fast. It still shows DB counts, but each count function safely returns 0 on error.
     known_users = await _count_collection("known_users")
     known_groups = await _count_collection("known_groups")
     gapproved = await _count_gapproved()
     blacklisted = await _count_collection("blacklisted_users")
     bot_ping = await _bot_ping_ms(message)
-    supported_lines = [f"{i}. {username} : {cmd}" for i, (username, cmd) in enumerate(SUPPORTED_BOTS, start=1)]
+
+    supported_lines = [
+        f"{i}. {username} : {cmd}"
+        for i, (username, cmd) in enumerate(SUPPORTED_BOTS, start=1)
+    ]
+
     return (
         "♻ BOT DATABASE STATUS\n"
         f"‣ Total Media : {_fmt_int(_snapshot_total())}\n"
@@ -176,7 +182,7 @@ async def build_status_text() -> str:
         "⚡ LOOKUP ENGINE\n"
         f"‣ Snapshot Age : {_snapshot_age()}\n"
         f"‣ Result Cache : {_cache_status()}\n"
-        f"‣ Bot latency : {_fmt_ms(bot_ping)}\n\n"
+        f"‣ Bot Latency : {_fmt_ms(bot_ping)}\n\n"
         "🤖 Supported Bot List\n"
         + "\n".join(supported_lines)
     )
@@ -186,6 +192,7 @@ async def build_stats_text(message: Message) -> str:
     db_ping = await _db_ping_ms()
     bot_ping = await _bot_ping_ms(message)
     ram_used, ram_left, ram_total = _ram_info()
+
     return (
         "📊 OWNER BOT STATS\n\n"
         f"‣ Uptime : {_uptime()}\n"
