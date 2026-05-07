@@ -175,7 +175,7 @@ async def build_status_text() -> str:
         "⚡ LOOKUP ENGINE\n"
         f"‣ Snapshot Age : {_snapshot_age()}\n"
         f"‣ Result Cache : {_cache_status()}\n"
-        f"‣ EMA latency : {_ema_latency()}\n\n"
+        f"‣ Bot latency : {_fmt_ms(bot_ping)}\n\n"
         "🤖 Supported Bot List\n"
         + "\n".join(supported_lines)
     )
