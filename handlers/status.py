@@ -9,16 +9,14 @@ from aiogram.types import Message
 from config import settings
 from database.mongo import get_db
 from services.group_access import is_owner_or_sudo
-from services.snapshot_cache import snapshot
 from services.lookup_service import lookup_service
+from services.snapshot_cache import snapshot
 from utils.perf import perf
 from utils.telegram_safe import safe_reply
 
 router = Router(name="status")
 log = logging.getLogger(__name__)
-
 START_TIME = time.time()
-
 
 SUPPORTED_BOTS = [
     ("@Character_Catcher_Bot", "/catch"),
@@ -66,80 +64,44 @@ def _uptime() -> str:
 
 
 def _snapshot_total() -> int:
+    # Use actual loaded item count, not len(file_uid), because duplicate file_unique_id can overwrite map entries.
     try:
-        return int(getattr(snapshot, "count"))
+        return int(snapshot.count)
     except Exception:
-        pass
-
-    try:
-        return len(snapshot.file_uid)
-    except Exception:
-        pass
-
-    total = 0
-    for attr in ("photos_by_collection", "videos_by_collection"):
-        try:
-            source = getattr(snapshot, attr, {}) or {}
-            for items in source.values():
-                total += len(items)
-        except Exception:
-            pass
-    return total
+        return 0
 
 
 def _snapshot_age() -> str:
     try:
         age = snapshot.age_seconds()
-        return f"{int(age)}s"
+        if age < 0:
+            return "N/A"
+        if age < 60:
+            return f"{age}s"
+        if age < 3600:
+            return f"{age // 60}m {age % 60}s"
+        return f"{age // 3600}h {(age % 3600) // 60}m"
     except Exception:
-        pass
-
-    for attr in ("last_refresh_at", "last_loaded_at", "loaded_at", "refreshed_at"):
-        try:
-            ts = getattr(snapshot, attr, None)
-            if ts:
-                age = int(time.time() - float(ts))
-                if age < 60:
-                    return f"{age}s"
-                if age < 3600:
-                    return f"{age // 60}m {age % 60}s"
-                return f"{age // 3600}h {(age % 3600) // 60}m"
-        except Exception:
-            pass
-    return "N/A"
+        return "N/A"
 
 
 def _cache_status() -> str:
     try:
         cur = len(lookup_service.result_cache)
     except Exception:
-        cur = 0
-    try:
-        max_items = settings.result_cache_max_items
-    except Exception:
-        max_items = 0
-    return f"{cur} / {max_items}"
+        try:
+            cur = len(getattr(lookup_service.result_cache, "_data", {}))
+        except Exception:
+            cur = 0
+    return f"{cur} / {settings.result_cache_max_items}"
 
 
 def _ema_latency() -> str:
     try:
         p = perf.snapshot()
-        v = p.get("lookup_ema_ms")
-        if v is not None:
-            return _fmt_ms(float(v))
+        return _fmt_ms(float(p.get("lookup_ema_ms", 0)))
     except Exception:
-        pass
-
-    for path in (("lookup", "ema_ms"), ("lookup", "ema"), ("lookup", "avg_ms")):
-        try:
-            obj = perf
-            for p in path:
-                obj = getattr(obj, p)
-            if obj is not None:
-                return _fmt_ms(float(obj))
-        except Exception:
-            pass
-    return "N/A"
+        return "N/A"
 
 
 async def _count_collection(name: str) -> int:
@@ -165,7 +127,6 @@ async def _db_ping_ms() -> float | None:
         await db.command("ping")
         return (time.perf_counter() - t0) * 1000
     except Exception:
-        log.exception("db ping failed")
         return None
 
 
@@ -175,19 +136,17 @@ async def _bot_ping_ms(message: Message) -> float | None:
         await message.bot.get_me()
         return (time.perf_counter() - t0) * 1000
     except Exception:
-        log.exception("bot ping failed")
         return None
 
 
 def _ram_info() -> tuple[str, str, str]:
     try:
-        data = {}
+        data: dict[str, int] = {}
         with open("/proc/meminfo", "r", encoding="utf-8") as f:
             for line in f:
                 parts = line.split()
                 if len(parts) >= 2:
                     data[parts[0].rstrip(":")] = int(parts[1]) * 1024
-
         total = data.get("MemTotal", 0)
         available = data.get("MemAvailable", 0)
         used = max(total - available, 0)
@@ -205,23 +164,19 @@ async def build_status_text() -> str:
     known_groups = await _count_collection("known_groups")
     gapproved = await _count_gapproved()
     blacklisted = await _count_collection("blacklisted_users")
-
-    supported_lines = []
-    for i, (username, cmd) in enumerate(SUPPORTED_BOTS, start=1):
-        supported_lines.append(f"{i}. {username} : {cmd}")
-
+    supported_lines = [f"{i}. {username} : {cmd}" for i, (username, cmd) in enumerate(SUPPORTED_BOTS, start=1)]
     return (
-        "♻ <b>BOT DATABASE STATUS</b>\n"
-        f"‣ Total Media : <code>{_fmt_int(_snapshot_total())}</code>\n"
-        f"‣ Known Users : <code>{_fmt_int(known_users)}</code>\n"
-        f"‣ Known Groups : <code>{_fmt_int(known_groups)}</code>\n"
-        f"‣ GApproved Groups : <code>{_fmt_int(gapproved)}</code>\n"
-        f"‣ Blacklisted Users : <code>{_fmt_int(blacklisted)}</code>\n\n"
-        "⚡ <b>LOOKUP ENGINE</b>\n"
-        f"‣ Snapshot Age : <code>{_snapshot_age()}</code>\n"
-        f"‣ Result Cache : <code>{_cache_status()}</code>\n"
-        f"‣ EMA latency : <code>{_ema_latency()}</code>\n\n"
-        "🤖 <b>Supported Bot List</b>\n"
+        "♻ BOT DATABASE STATUS\n"
+        f"‣ Total Media : {_fmt_int(_snapshot_total())}\n"
+        f"‣ Known Users : {_fmt_int(known_users)}\n"
+        f"‣ Known Groups : {_fmt_int(known_groups)}\n"
+        f"‣ GApproved Groups : {_fmt_int(gapproved)}\n"
+        f"‣ Blacklisted Users : {_fmt_int(blacklisted)}\n\n"
+        "⚡ LOOKUP ENGINE\n"
+        f"‣ Snapshot Age : {_snapshot_age()}\n"
+        f"‣ Result Cache : {_cache_status()}\n"
+        f"‣ EMA latency : {_ema_latency()}\n\n"
+        "🤖 Supported Bot List\n"
         + "\n".join(supported_lines)
     )
 
@@ -230,20 +185,19 @@ async def build_stats_text(message: Message) -> str:
     db_ping = await _db_ping_ms()
     bot_ping = await _bot_ping_ms(message)
     ram_used, ram_left, ram_total = _ram_info()
-
     return (
-        "📊 <b>OWNER BOT STATS</b>\n\n"
-        f"‣ Uptime : <code>{_uptime()}</code>\n"
-        f"‣ DB Ping : <code>{_fmt_ms(db_ping)}</code>\n"
-        f"‣ Bot Ping : <code>{_fmt_ms(bot_ping)}</code>\n"
-        f"‣ RAM Used : <code>{ram_used}</code>\n"
-        f"‣ RAM Left : <code>{ram_left}</code>\n"
-        f"‣ RAM Total : <code>{ram_total}</code>\n\n"
-        "⚡ <b>LOOKUP ENGINE</b>\n"
-        f"‣ Snapshot Age : <code>{_snapshot_age()}</code>\n"
-        f"‣ Total Media : <code>{_fmt_int(_snapshot_total())}</code>\n"
-        f"‣ Result Cache : <code>{_cache_status()}</code>\n"
-        f"‣ EMA latency : <code>{_ema_latency()}</code>"
+        "📊 OWNER BOT STATS\n\n"
+        f"‣ Uptime : {_uptime()}\n"
+        f"‣ DB Ping : {_fmt_ms(db_ping)}\n"
+        f"‣ Bot Ping : {_fmt_ms(bot_ping)}\n"
+        f"‣ RAM Used : {ram_used}\n"
+        f"‣ RAM Left : {ram_left}\n"
+        f"‣ RAM Total : {ram_total}\n\n"
+        "⚡ LOOKUP ENGINE\n"
+        f"‣ Snapshot Age : {_snapshot_age()}\n"
+        f"‣ Total Media : {_fmt_int(_snapshot_total())}\n"
+        f"‣ Result Cache : {_cache_status()}\n"
+        f"‣ EMA latency : {_ema_latency()}"
     )
 
 
@@ -258,5 +212,4 @@ async def stats_cmd(message: Message) -> None:
     if not is_owner_or_sudo(user_id):
         await safe_reply(message, "❌ Owner only command.")
         return
-
     await safe_reply(message, await build_stats_text(message))
