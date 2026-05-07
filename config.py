@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def _bool(name: str, default: bool = False) -> bool:
