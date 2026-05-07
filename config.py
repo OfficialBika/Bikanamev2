@@ -155,7 +155,7 @@ class Settings:
     auto_lookup_enabled: bool = _bool("AUTO_LOOKUP_ENABLED", True)
     auto_lookup_only_approved_groups: bool = _bool("AUTO_LOOKUP_ONLY_APPROVED_GROUPS", True)
     auto_lookup_in_support_group: bool = _bool("AUTO_LOOKUP_IN_SUPPORT_GROUP", True)
-    auto_lookup_in_dm: bool = _bool("AUTO_LOOKUP_IN_DM", False)
+    auto_lookup_in_dm: bool = _bool("AUTO_LOOKUP_IN_DM", True)
 
     default_command: str = os.getenv("DEFAULT_COMMAND", "/hallow")
     show_source_in_result: bool = _bool("SHOW_SOURCE_IN_RESULT", False)
