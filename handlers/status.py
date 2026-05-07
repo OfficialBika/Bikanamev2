@@ -204,7 +204,7 @@ async def build_stats_text(message: Message) -> str:
 
 @router.message(Command("status"))
 async def status_cmd(message: Message) -> None:
-    await safe_reply(message, await build_status_text())
+    await safe_reply(message, await build_status_text(message))
 
 
 @router.message(Command("stats"))
