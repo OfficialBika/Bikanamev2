@@ -5,6 +5,7 @@ import io
 import logging
 import time
 from dataclasses import dataclass, replace
+from typing import Iterable
 
 from aiogram import Bot
 from aiogram.types import Message
@@ -12,12 +13,14 @@ from aiogram.types import Message
 from config import settings
 from services.hash_service import MediaHash, hamming_hex, hash_photo, hash_video
 from services.snapshot_cache import ItemSnapshot, snapshot
-from services.source_resolver import collection_from_command, command_from_text, default_collection, output_command_from_message, resolve_collection
+from services.source_resolver import output_command_from_message, resolve_lookup_collections, all_lookup_collections
 from utils.media import extract_media
 from utils.perf import perf
 from utils.ttl_cache import TTLCache
 
 log = logging.getLogger(__name__)
+
+CollectionFilter = list[str] | None
 
 
 @dataclass(frozen=True)
@@ -44,30 +47,25 @@ class LookupService:
                 if not media:
                     return self._done(None, "no_media", t0)
 
-                # Manual commands search all collections unless the replied/forwarded source resolves a specific collection.
                 source_message = media.source_message
-                resolved_collection = resolve_collection(source_message)
-                # Manual lookup searches all collections when source is unknown.
-                # DM auto lookup also searches all collections when source is unknown,
-                # so users can forward/send media to bot DM and still get a result.
-                if resolved_collection:
-                    collection = resolved_collection
-                elif manual or message.chat.type == "private":
-                    collection = None
-                else:
-                    collection = default_collection()
-                output_command = output_command_from_message(source_message, collection)
-                manual_cmd = command_from_text(message.text or message.caption or "")
-                if manual_cmd and collection_from_command(manual_cmd) == collection:
-                    output_command = manual_cmd
+
+                # New priority system:
+                # 1) source collection, 2) command collections, 3) all collections.
+                collection_filter = resolve_lookup_collections(source_message)
+                output_command = output_command_from_message(
+                    source_message,
+                    collection_filter[0] if collection_filter and len(collection_filter) == 1 else None,
+                )
+
                 file_uid = getattr(media.obj, "file_unique_id", None)
+                filter_tag = self._filter_tag(collection_filter)
 
                 if file_uid:
-                    item = self._lookup_uid(file_uid, collection)
+                    item = self._lookup_uid(file_uid, collection_filter)
                     if item:
                         hit = True
                         return self._done(self._with_command(item, output_command), "uid", t0)
-                    if self.miss_cache.get(f"uid:{file_uid}"):
+                    if self.miss_cache.get(f"uid:{filter_tag}:{file_uid}"):
                         return self._done(None, "miss_cache_uid", t0)
 
                 data = await self._download(bot, getattr(media.obj, "file_id"))
@@ -76,15 +74,17 @@ class LookupService:
 
                 mh = await asyncio.to_thread(hash_photo if media.media_type == "photo" else hash_video, data)
                 cache_key = f"sha:{mh.sha256}" if mh.sha256 else (f"uid:{file_uid}" if file_uid else "")
+                miss_key = f"{cache_key}:{filter_tag}" if cache_key else ""
+
                 if cache_key:
                     cached = self.result_cache.get(cache_key)
-                    if cached and (collection is None or cached.collection == collection):
+                    if cached and self._matches_filter(cached.collection, collection_filter):
                         hit = True
                         return self._done(self._with_command(cached, output_command), "cache", t0)
-                    if self.miss_cache.get(cache_key):
+                    if miss_key and self.miss_cache.get(miss_key):
                         return self._done(None, "miss_cache", t0)
 
-                item = self._match_hash(mh, media.media_type, collection)
+                item = self._match_hash(mh, media.media_type, collection_filter)
                 if item:
                     hit = True
                     if cache_key:
@@ -93,10 +93,10 @@ class LookupService:
                         self.result_cache.set(f"uid:{file_uid}", item)
                     return self._done(self._with_command(item, output_command), "hash", t0)
 
-                if cache_key:
-                    self.miss_cache.set(cache_key, True)
+                if miss_key:
+                    self.miss_cache.set(miss_key, True)
                 if file_uid:
-                    self.miss_cache.set(f"uid:{file_uid}", True)
+                    self.miss_cache.set(f"uid:{filter_tag}:{file_uid}", True)
                 return self._done(None, "not_found", t0)
         except Exception:
             error = True
@@ -114,12 +114,21 @@ class LookupService:
     def _done(self, item: ItemSnapshot | None, reason: str, t0: float) -> LookupResult:
         return LookupResult(item=item, reason=reason, elapsed_ms=(time.perf_counter() - t0) * 1000)
 
-    def _lookup_uid(self, file_uid: str, collection: str | None) -> ItemSnapshot | None:
+    def _filter_tag(self, collection_filter: CollectionFilter) -> str:
+        if not collection_filter:
+            return "all"
+        return "+".join(collection_filter)
+
+    def _matches_filter(self, collection: str, collection_filter: CollectionFilter) -> bool:
+        return not collection_filter or collection in collection_filter
+
+    def _lookup_uid(self, file_uid: str, collection_filter: CollectionFilter) -> ItemSnapshot | None:
         cached = self.result_cache.get(f"uid:{file_uid}")
-        if cached and (collection is None or cached.collection == collection):
+        if cached and self._matches_filter(cached.collection, collection_filter):
             return cached
+
         item = snapshot.file_uid.get(file_uid)
-        if item and (collection is None or item.collection == collection):
+        if item and self._matches_filter(item.collection, collection_filter):
             self.result_cache.set(f"uid:{file_uid}", item)
             return item
         return None
@@ -137,22 +146,32 @@ class LookupService:
                 log.warning("download failed", exc_info=True)
                 return None
 
-    def _candidates(self, collection: str | None, media_type: str) -> list[ItemSnapshot]:
+    def _candidate_collections(self, collection_filter: CollectionFilter) -> Iterable[str]:
+        if collection_filter:
+            return collection_filter
+        return all_lookup_collections()
+
+    def _candidates(self, collection_filter: CollectionFilter, media_type: str) -> list[ItemSnapshot]:
         source = snapshot.photos_by_collection if media_type == "photo" else snapshot.videos_by_collection
-        if collection:
-            return source.get(collection, [])
         out: list[ItemSnapshot] = []
-        for items in source.values():
-            out.extend(items)
+        for collection in self._candidate_collections(collection_filter):
+            out.extend(source.get(collection, []))
         return out
 
-    def _match_hash(self, mh: MediaHash, media_type: str, collection: str | None) -> ItemSnapshot | None:
+    def _match_hash(self, mh: MediaHash, media_type: str, collection_filter: CollectionFilter) -> ItemSnapshot | None:
         if mh.sha256:
             exact = snapshot.sha256.get(mh.sha256)
-            if exact and (collection is None or exact.collection == collection):
+            if exact and self._matches_filter(exact.collection, collection_filter):
                 return exact
+
+            # If the global sha256 map was overwritten by the same media in another collection,
+            # still check the filtered candidates so source/command lookup can find the right item.
+            for item in self._candidates(collection_filter, media_type):
+                if item.sha256 and item.sha256 == mh.sha256:
+                    return item
+
         best: tuple[float, ItemSnapshot] | None = None
-        for item in self._candidates(collection, media_type):
+        for item in self._candidates(collection_filter, media_type):
             if media_type == "photo" and mh.phash and item.phash:
                 d = hamming_hex(mh.phash, item.phash)
                 if d is not None and d <= settings.photo_phash_threshold and (best is None or d < best[0]):
