@@ -80,7 +80,10 @@ def run_webhook() -> None:
     )
 
     dp = build_dispatcher()
+async def health(request):
+    return web.Response(text="Bot is running!")
 
+    app.router.add_get("/", health)
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
