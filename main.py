@@ -74,16 +74,31 @@ async def run_polling() -> None:
 
 
 async def run_webhook() -> None:
-    bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(
+        settings.bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+
     dp = build_dispatcher()
+
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
     app = web.Application()
-    SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=settings.webhook_secret).register(app, path=settings.webhook_path)
-    setup_application(app, dp, bot=bot)
-    web.run_app(app, host=settings.host, port=settings.port)
 
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+        secret_token=settings.webhook_secret,
+    ).register(app, path=settings.webhook_path)
+
+    setup_application(app, dp, bot=bot)
+
+    web.run_app(
+        app,
+        host=settings.host,
+        port=settings.port,
+    )
 
 def main() -> None:
     setup_logging()
@@ -92,7 +107,7 @@ def main() -> None:
     if uvloop and sys.platform != "win32":
         uvloop.install()
     if settings.use_webhook or settings.mode == "webhook":
-        asyncio.run(run_webhook())
+        run_webhook()
     else:
         asyncio.run(run_polling())
 
