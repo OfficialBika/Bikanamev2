@@ -41,7 +41,7 @@ COMMAND_TO_COLLECTIONS: dict[str, list[str]] = {
     "/hallow": ["items_characters_hallow"],
     "/capture": ["items_capture_character"],
     "/seize": ["items_character_seizer"],
-    "/loot": ["items_character_seizer"],
+    "/loot": ["items_capture_character"],
     "/take": ["items_takers_character"],
     "/smash": ["items_smash_character"],
     "/grab": [
