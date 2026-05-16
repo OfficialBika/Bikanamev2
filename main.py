@@ -73,7 +73,7 @@ async def run_polling() -> None:
         await bot.session.close()
 
 
-async def run_webhook() -> None:
+def run_webhook() -> None:
     bot = Bot(
         settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
