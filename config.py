@@ -72,7 +72,7 @@ COMMAND_TO_COLLECTION: Dict[str, str] = {
     "/hallow": "items_characters_hallow",
     "/capture": "items_capture_character",
     "/seize": "items_character_seizer",
-    "/loot": "items_character_seizer",
+    "/loot": "items_capture_character",
     "/take": "items_takers_character",
     "/smash": "items_smash_character",
 }
@@ -85,7 +85,7 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@capturedatabase": "items_capture_character",
     "@character_seizer_bot": "items_character_seizer",
     "@seizer_database": "items_character_seizer",
-    "@characterlootbot": "items_character_seizer",
+    "@characterlootbot": "items_capture_character",
     "@husbando_grabber_bot": "items_husbando_grabber",
     "@grab_your_waifu_bot": "items_grab_your_waifu",
     "@grab_your_husbando_bot": "items_grab_your_husbando",
