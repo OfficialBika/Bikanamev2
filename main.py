@@ -62,7 +62,7 @@ async def on_shutdown(bot: Bot) -> None:
     await close_mongo()
 
 
-def run_polling() -> None:
+async def run_polling() -> None:
     bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = build_dispatcher()
     await on_startup(bot)
@@ -73,7 +73,7 @@ def run_polling() -> None:
         await bot.session.close()
 
 
-async def run_webhook() -> None:
+def run_webhook() -> None:
     bot = Bot(
         settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
