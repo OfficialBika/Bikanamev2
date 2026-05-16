@@ -62,7 +62,7 @@ async def on_shutdown(bot: Bot) -> None:
     await close_mongo()
 
 
-async def run_polling() -> None:
+def run_polling() -> None:
     bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = build_dispatcher()
     await on_startup(bot)
