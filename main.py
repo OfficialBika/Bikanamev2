@@ -96,8 +96,8 @@ def run_webhook() -> None:
 
     web.run_app(
         app,
-        host=settings.host,
-        port=settings.port,
+        host="0.0.0.0",
+        port=int(settings.port),
     )
 
 def main() -> None:
