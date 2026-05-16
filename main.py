@@ -73,7 +73,7 @@ async def run_polling() -> None:
         await bot.session.close()
 
 
-def run_webhook() -> None:
+async def run_webhook() -> None:
     bot = Bot(
         settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
@@ -86,23 +86,23 @@ def run_webhook() -> None:
 
     app = web.Application()
 
-async def health(request):
-    return web.Response(text="Bot is running!")
+    async def health(request):
+        return web.Response(text="Bot is running!")
 
-app.router.add_get("/", health)
+    app.router.add_get("/", health)
 
-SimpleRequestHandler(
-    dispatcher=dp,
-    bot=bot,
-    secret_token=settings.webhook_secret,
-).register(app, path=settings.webhook_path)
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+        secret_token=settings.webhook_secret,
+    ).register(app, path=settings.webhook_path)
 
     setup_application(app, dp, bot=bot)
 
     web.run_app(
         app,
-        host="0.0.0.0",
-        port=int(settings.port),
+        host=settings.host,
+        port=settings.port,
     )
 
 def main() -> None:
