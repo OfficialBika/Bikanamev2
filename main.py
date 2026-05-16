@@ -57,8 +57,6 @@ async def on_startup(bot: Bot) -> None:
 
 
 async def on_shutdown(bot: Bot) -> None:
-    if settings.use_webhook or settings.mode == "webhook":
-        await bot.delete_webhook(drop_pending_updates=False)
     await close_mongo()
 
 
