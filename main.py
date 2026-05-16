@@ -85,15 +85,17 @@ def run_webhook() -> None:
     dp.shutdown.register(on_shutdown)
 
     app = web.Application()
-    async def health(request):
+
+async def health(request):
     return web.Response(text="Bot is running!")
 
-    app.router.add_get("/", health)
-    SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-        secret_token=settings.webhook_secret,
-    ).register(app, path=settings.webhook_path)
+app.router.add_get("/", health)
+
+SimpleRequestHandler(
+    dispatcher=dp,
+    bot=bot,
+    secret_token=settings.webhook_secret,
+).register(app, path=settings.webhook_path)
 
     setup_application(app, dp, bot=bot)
 
