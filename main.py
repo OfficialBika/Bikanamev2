@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import time
+from typing import Any, Awaitable, Callable
 
-from aiogram import Bot, Dispatcher
+from aiogram import BaseMiddleware, Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import CallbackQuery, Message, TelegramObject
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
@@ -22,6 +25,31 @@ except Exception:  # pragma: no cover
     uvloop = None
 
 
+PROCESS_STARTED_AT = int(time.time())
+
+
+class DropOldUpdatesMiddleware(BaseMiddleware):
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        msg = None
+
+        if isinstance(event, Message):
+            msg = event
+        elif isinstance(event, CallbackQuery) and isinstance(event.message, Message):
+            msg = event.message
+
+        if msg and msg.date:
+            # Bot process မစခင်လာထားတဲ့ message/callback တွေကို skip လုပ်မယ်
+            if int(msg.date.timestamp()) < PROCESS_STARTED_AT:
+                return None
+
+        return await handler(event, data)
+
+
 def setup_logging() -> None:
     logging.basicConfig(
         level=getattr(logging, settings.log_level, logging.INFO),
@@ -31,6 +59,12 @@ def setup_logging() -> None:
 
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher()
+
+    # Old updates တွေကို handler တွေဆီ မရောက်ခင်ဖြတ်မယ်
+    drop_old = DropOldUpdatesMiddleware()
+    dp.message.outer_middleware(drop_old)
+    dp.callback_query.outer_middleware(drop_old)
+
     dp.include_router(start.router)
     dp.include_router(admin.router)
     dp.include_router(status.router)
@@ -63,9 +97,17 @@ async def on_shutdown(bot: Bot) -> None:
 async def run_polling() -> None:
     bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = build_dispatcher()
-    await on_startup(bot)
+
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        # Bot ရပ်ထားတုန်း Telegram မှာကျန်နေတဲ့ pending updates တွေကို ဖျက်မယ်
+        await bot.delete_webhook(drop_pending_updates=True)
+
+        await on_startup(bot)
+
+        await dp.start_polling(
+            bot,
+            allowed_updates=dp.resolve_used_update_types(),
+        )
     finally:
         await on_shutdown(bot)
         await bot.session.close()
@@ -102,6 +144,7 @@ def run_webhook() -> None:
         host=settings.host,
         port=settings.port,
     )
+
 
 def main() -> None:
     setup_logging()
