@@ -33,6 +33,8 @@ SUPPORTED_BOTS = [
     ("@Catch_Your_Waifu_Bot", "/guess"),
     ("@Waifu_Grabber_Bot", "/grab"),
     ("@CharacterLootBot", "/loot"),
+    ("@roronoa_zoro_robot", "/challenge"),
+    ("@character_picker_bot", "/pick"),
 ]
 
 
@@ -175,8 +177,8 @@ async def build_status_text(message: Message) -> str:
     return (
         "♻ BOT DATABASE STATUS\n"
         f"‣ Total Media : {_fmt_int(_snapshot_total())}\n"
-        f"‣ Known Users : {_fmt_int(known_users)}\n"
-        f"‣ Known Groups : {_fmt_int(known_groups)}\n"
+        f"‣ Total Users : {_fmt_int(known_users)}\n"
+        f"‣ Total Groups : {_fmt_int(known_groups)}\n"
         f"‣ GApproved Groups : {_fmt_int(gapproved)}\n"
         f"‣ Blacklisted Users : {_fmt_int(blacklisted)}\n\n"
         "⚡ LOOKUP ENGINE\n"
