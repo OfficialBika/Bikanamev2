@@ -32,6 +32,8 @@ LOOKUP_COLLECTION_ORDER: list[str] = [
     "items_waifux_grab",
     "items_catch_your_waifu",
     "items_waifu_grabber",
+    "items_roronoa_zoro",
+    "items_character_picker",
 ]
 
 # Commands that may map to more than one collection.
@@ -44,6 +46,8 @@ COMMAND_TO_COLLECTIONS: dict[str, list[str]] = {
     "/loot": ["items_capture_character"],
     "/take": ["items_takers_character"],
     "/smash": ["items_smash_character"],
+    "/challenge": ["items_roronoa_zoro"],
+    "/pick": ["items_character_picker"],
     "/grab": [
         "items_husbando_grabber",
         "items_grab_your_waifu",
@@ -118,6 +122,11 @@ TITLE_SOURCE_COLLECTION = {
     "waifu grabber bot": "items_waifu_grabber",
     "ᴡᴀɪғᴜ ɢʀᴀʙʙᴇʀ": "items_waifu_grabber",
     "ᴡᴀɪғᴜ ɢʀᴀʙʙᴇʀ ʙᴏᴛ": "items_waifu_grabber",
+    "roronoa zoro": "items_roronoa_zoro",
+    "roronoa zoro bot": "items_roronoa_zoro",
+    "picker bot": "items_character_picker",
+    "character picker": "items_character_picker",
+    "character picker bot": "items_character_picker",
 }
 
 TITLE_OUTPUT_COMMAND = {
@@ -125,6 +134,11 @@ TITLE_OUTPUT_COMMAND = {
     "character loot bot": "/loot",
     "character looter": "/loot",
     "character looter bot": "/loot",
+    "roronoa zoro": "/challenge",
+    "roronoa zoro bot": "/challenge",
+    "picker bot": "/pick",
+    "character picker": "/pick",
+    "character picker bot": "/pick",
 }
 
 
