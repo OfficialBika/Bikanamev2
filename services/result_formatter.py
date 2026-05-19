@@ -18,7 +18,7 @@ def _copy_button(text: str, value: str) -> InlineKeyboardButton:
 
 
 def format_result(item: ItemSnapshot) -> str:
-    lines = [f"<b>NAME :</b> {h(item.name)}"]
+    lines = [f"<b>NAME :</b> <code>{h(item.name)}</code>"]
     hide_id_rarity = item.command in HIDE_ID_RARITY_COMMANDS
     if item.card_id is not None and not hide_id_rarity:
         lines.append(f"<b>ID :</b> {h(item.card_id)}")
