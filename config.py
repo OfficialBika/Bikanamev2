@@ -63,6 +63,8 @@ COLLECTION_TO_OUTPUT_COMMAND: Dict[str, str] = {
     "items_waifux_grab": "/grab",
     "items_catch_your_waifu": "/guess",
     "items_waifu_grabber": "/grab",
+    "items_roronoa_zoro": "/challenge",
+    "items_character_picker": "/pick",
     "items_unknown": "/name",
 }
 
@@ -75,6 +77,8 @@ COMMAND_TO_COLLECTION: Dict[str, str] = {
     "/loot": "items_capture_character",
     "/take": "items_takers_character",
     "/smash": "items_smash_character",
+    "/challenge": "items_roronoa_zoro",
+    "/pick": "items_character_picker",
 }
 
 BOT_SOURCE_COLLECTION: Dict[str, str] = {
@@ -95,6 +99,8 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@waifuxgrabbot": "items_waifux_grab",
     "@catch_your_waifu_bot": "items_catch_your_waifu",
     "@waifu_grabber_bot": "items_waifu_grabber",
+    "@roronoa_zoro_robot": "items_roronoa_zoro",
+    "@character_picker_bot": "items_character_picker",
 }
 
 # Some bots share a database collection but need a different command in the result.
@@ -105,7 +111,7 @@ BOT_SOURCE_OUTPUT_COMMAND: Dict[str, str] = {
 
 # These commands should return only the name/hint/full.
 # ID and rarity are intentionally hidden for Capture, Seizer and Loot results.
-HIDE_ID_RARITY_COMMANDS: Set[str] = {"/capture", "/seize", "/loot"}
+HIDE_ID_RARITY_COMMANDS: Set[str] = {"/capture", "/seize", "/loot", "/challenge"}
 
 SYSTEM_COLLECTIONS = {"sudo_users", "known_users", "user_modes", "settings", "items"}
 
