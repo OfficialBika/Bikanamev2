@@ -34,6 +34,7 @@ LOOKUP_COLLECTION_ORDER: list[str] = [
     "items_waifu_grabber",
     "items_roronoa_zoro",
     "items_character_picker",
+    "items_bika_character",
 ]
 
 # Commands that may map to more than one collection.
@@ -48,6 +49,7 @@ COMMAND_TO_COLLECTIONS: dict[str, list[str]] = {
     "/smash": ["items_smash_character"],
     "/challenge": ["items_roronoa_zoro"],
     "/pick": ["items_character_picker"],
+    "/bika": ["items_bika_character"],
     "/grab": [
         "items_husbando_grabber",
         "items_grab_your_waifu",
@@ -127,6 +129,8 @@ TITLE_SOURCE_COLLECTION = {
     "picker bot": "items_character_picker",
     "character picker": "items_character_picker",
     "character picker bot": "items_character_picker",
+    "bika waifu database": "items_bika_character",
+    "bika character bot": "items_bika_character",
 }
 
 TITLE_OUTPUT_COMMAND = {
@@ -139,6 +143,8 @@ TITLE_OUTPUT_COMMAND = {
     "picker bot": "/pick",
     "character picker": "/pick",
     "character picker bot": "/pick",
+    "bika waifu database": "/bika",
+    "bika character bot": "/bika",
 }
 
 
