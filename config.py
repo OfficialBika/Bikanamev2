@@ -65,6 +65,7 @@ COLLECTION_TO_OUTPUT_COMMAND: Dict[str, str] = {
     "items_waifu_grabber": "/grab",
     "items_roronoa_zoro": "/challenge",
     "items_character_picker": "/pick",
+    "items_bika_character": "/bika",
     "items_unknown": "/name",
 }
 
@@ -79,6 +80,7 @@ COMMAND_TO_COLLECTION: Dict[str, str] = {
     "/smash": "items_smash_character",
     "/challenge": "items_roronoa_zoro",
     "/pick": "items_character_picker",
+    "/bika": "items_bika_character",
 }
 
 BOT_SOURCE_COLLECTION: Dict[str, str] = {
@@ -101,6 +103,7 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@waifu_grabber_bot": "items_waifu_grabber",
     "@roronoa_zoro_robot": "items_roronoa_zoro",
     "@character_picker_bot": "items_character_picker",
+    "@bikacharacterbot": "items_bika_character",
 }
 
 # Some bots share a database collection but need a different command in the result.
