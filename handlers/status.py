@@ -35,6 +35,8 @@ SUPPORTED_BOTS = [
     ("@CharacterLootBot", "/loot"),
     ("@roronoa_zoro_robot", "/challenge"),
     ("@character_picker_bot", "/pick"),
+    ("@BikaCharacterBot", "/bika"),
+    ("@SenpaiCatcherBot", "/pick"),
 ]
 
 
