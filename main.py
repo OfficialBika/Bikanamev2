@@ -16,7 +16,7 @@ from aiohttp import web
 from config import settings
 from database.indexes import ensure_indexes
 from database.mongo import close_mongo, init_mongo
-from handlers import admin, auto_lookup, manual_lookup, start, status
+from handlers import admin, auto_lookup, free, manual_lookup, start, status
 from services.snapshot_cache import snapshot
 
 try:
@@ -68,6 +68,7 @@ def build_dispatcher() -> Dispatcher:
     dp.include_router(start.router)
     dp.include_router(admin.router)
     dp.include_router(status.router)
+    dp.include_router(free.router)
     dp.include_router(manual_lookup.router)
     dp.include_router(auto_lookup.router)
     return dp
