@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from config import settings
 from locales import en, my
 from utils.ttl_cache import TTLCache
+from services.free_users import is_free_user
 
 log = logging.getLogger(__name__)
 _join_cache: TTLCache[str, bool] = TTLCache(50000, settings.force_join_cache_seconds)
@@ -28,6 +29,10 @@ async def bot_username(bot: Bot) -> str:
 async def has_joined(bot: Bot, user_id: int) -> bool:
     if not settings.enable_force_join or not settings.force_join_channels:
         return True
+        # Free users bypass force-join check.
+    if await is_free_user(user_id):
+        return True
+        
     key = f"{user_id}:{'|'.join(settings.force_join_channels)}"
     cached = _join_cache.get(key)
     if cached is not None:
