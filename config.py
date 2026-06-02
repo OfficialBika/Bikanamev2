@@ -80,9 +80,8 @@ COMMAND_TO_COLLECTION: Dict[str, str] = {
     "/take": "items_takers_character",
     "/smash": "items_smash_character",
     "/challenge": "items_roronoa_zoro",
-    "/pick": "items_character_picker", "items_senpai_catcher",
+    "/pick": "items_character_picker",
     "/bika": "items_bika_character",
-    "/pick": "items_senpai_catcher",
 }
 
 BOT_SOURCE_COLLECTION: Dict[str, str] = {
