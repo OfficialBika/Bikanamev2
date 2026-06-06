@@ -13,7 +13,7 @@ from aiogram.types import Message
 from config import settings
 from services.hash_service import MediaHash, hamming_hex, hash_photo, hash_video
 from services.snapshot_cache import ItemSnapshot, snapshot
-from services.source_resolver import output_command_from_message, resolve_lookup_collections, all_lookup_collections
+from services.source_resolver import output_command_from_message, resolve_lookup_collections, resolve_lookup_scope, all_lookup_collections
 from utils.media import extract_media
 from utils.perf import perf
 from utils.ttl_cache import TTLCache
@@ -49,9 +49,12 @@ class LookupService:
 
                 source_message = media.source_message
 
-                # New priority system:
-                # 1) source collection, 2) command collections, 3) all collections.
-                collection_filter = resolve_lookup_collections(source_message)
+                # Fast scoped lookup:
+                # 1) source/forward collection, 2) command collection group, 3) all collections.
+                # If a scoped search misses, settings.fallback_all_on_strict_miss controls
+                # whether we do the old all-database fallback.
+                scope = resolve_lookup_scope(source_message)
+                collection_filter = scope.collections
                 output_command = output_command_from_message(
                     source_message,
                     collection_filter[0] if collection_filter and len(collection_filter) == 1 else None,
@@ -66,7 +69,10 @@ class LookupService:
                         hit = True
                         return self._done(self._with_command(item, output_command), "uid", t0)
                     if self.miss_cache.get(f"uid:{filter_tag}:{file_uid}"):
-                        return self._done(None, "miss_cache_uid", t0)
+                        # If fallback is enabled, do not stop on a scoped UID miss.
+                        # The same media may still be found by hash in another collection.
+                        if not (collection_filter and settings.fallback_all_on_strict_miss):
+                            return self._done(None, "miss_cache_uid", t0)
 
                 data = await self._download(bot, getattr(media.obj, "file_id"))
                 if not data:
@@ -82,7 +88,8 @@ class LookupService:
                         hit = True
                         return self._done(self._with_command(cached, output_command), "cache", t0)
                     if miss_key and self.miss_cache.get(miss_key):
-                        return self._done(None, "miss_cache", t0)
+                        if not (collection_filter and settings.fallback_all_on_strict_miss):
+                            return self._done(None, "miss_cache", t0)
 
                 item = self._match_hash(mh, media.media_type, collection_filter)
                 if item:
@@ -91,7 +98,39 @@ class LookupService:
                         self.result_cache.set(cache_key, item)
                     if file_uid:
                         self.result_cache.set(f"uid:{file_uid}", item)
+                    output_command = output_command_from_message(source_message, item.collection) or output_command
                     return self._done(self._with_command(item, output_command), "hash", t0)
+
+                # Optional compatibility fallback:
+                # Fast path searches only the resolved source/command collection(s).
+                # If it misses and fallback is enabled, reuse the same downloaded hash
+                # and try all collections once without re-downloading media.
+                if collection_filter and settings.fallback_all_on_strict_miss:
+                    fallback_item = None
+
+                    if file_uid:
+                        fallback_item = self._lookup_uid(file_uid, None)
+
+                    if not fallback_item and cache_key:
+                        cached_any = self.result_cache.get(cache_key)
+                        if cached_any:
+                            fallback_item = cached_any
+
+                    if not fallback_item:
+                        fallback_item = self._match_hash(mh, media.media_type, None)
+
+                    if fallback_item:
+                        hit = True
+                        if cache_key:
+                            self.result_cache.set(cache_key, fallback_item)
+                        if file_uid:
+                            self.result_cache.set(f"uid:{file_uid}", fallback_item)
+                        fallback_command = output_command_from_message(source_message, fallback_item.collection) or output_command
+                        return self._done(
+                            self._with_command(fallback_item, fallback_command),
+                            f"{scope.mode}_fallback_hash",
+                            t0,
+                        )
 
                 if miss_key:
                     self.miss_cache.set(miss_key, True)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from aiogram.types import Message
 from config import (
@@ -12,6 +13,23 @@ from config import (
 
 # Manual lookup commands. /loop is intentionally NOT included.
 MANUAL_COMMANDS = {"/waifu", "/w", ".wa", ".w", "/name", ".name", "/bika", "/loot"}
+
+@dataclass(frozen=True)
+class LookupScope:
+    """Resolved lookup scope for fast source/command-aware search.
+
+    mode:
+      - "source": forward/direct/via-bot source resolved to one collection
+      - "command": caption/text command resolved to one or more collections
+      - "all": no reliable source/command scope
+    """
+    collections: list[str] | None
+    mode: str
+    command: str | None = None
+    source_collection: str | None = None
+    strict: bool = False
+    confident: bool = False
+
 
 USING_RE = re.compile(r"(?:using|use|hint|full)\s*[:：]?\s*(/[a-zA-Z_]+)", re.I)
 CMD_RE = re.compile(r"(^|\s)(/[a-zA-Z_]+)(?=\s|$)")
@@ -332,19 +350,54 @@ def resolve_source_collection(message: Message) -> str | None:
     return None
 
 
-def resolve_lookup_collections(message: Message) -> list[str] | None:
-    """Priority:
-    1) Source collection if forward/direct source is known.
+def resolve_lookup_scope(message: Message) -> LookupScope:
+    """Resolve the narrowest safe lookup scope.
+
+    Priority:
+    1) Forward/direct/via-bot source collection if known.
     2) Caption/text command collection(s) if command is present.
     3) None means search all collections in LOOKUP_COLLECTION_ORDER.
+
+    The strict flags are carried in the scope so lookup_service can decide
+    whether to fallback to all collections after a scoped miss.
     """
     source_col = resolve_source_collection(message)
-    if source_col:
-        return [source_col]
-
     cmd = command_from_text(message.caption or message.text or "")
-    cols = collections_from_command(cmd)
-    return cols or None
+    cmd_cols = collections_from_command(cmd)
+
+    if source_col:
+        return LookupScope(
+            collections=[source_col],
+            mode="source",
+            command=cmd,
+            source_collection=source_col,
+            strict=settings.strict_forward_source_lookup,
+            confident=True,
+        )
+
+    if cmd_cols:
+        return LookupScope(
+            collections=cmd_cols,
+            mode="command",
+            command=cmd,
+            source_collection=None,
+            strict=settings.strict_command_lookup,
+            confident=True,
+        )
+
+    return LookupScope(
+        collections=None,
+        mode="all",
+        command=cmd,
+        source_collection=None,
+        strict=False,
+        confident=False,
+    )
+
+
+def resolve_lookup_collections(message: Message) -> list[str] | None:
+    """Backward-compatible wrapper used by older code."""
+    return resolve_lookup_scope(message).collections
 
 
 def resolve_collection(message: Message) -> str | None:
