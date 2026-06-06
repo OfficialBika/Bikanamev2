@@ -189,6 +189,14 @@ class Settings:
     max_concurrent_lookups: int = _int("MAX_CONCURRENT_LOOKUPS", 50)
     download_timeout_seconds: int = _int("DOWNLOAD_TIMEOUT_SECONDS", 8)
 
+    # Lookup speed optimization:
+    # - source/forward known => search only that source collection first
+    # - command known => search only the command's collection group first
+    # - optional fallback keeps old all-database search behavior if strict scope misses
+    strict_forward_source_lookup: bool = _bool("STRICT_FORWARD_SOURCE_LOOKUP", True)
+    strict_command_lookup: bool = _bool("STRICT_COMMAND_LOOKUP", True)
+    fallback_all_on_strict_miss: bool = _bool("FALLBACK_ALL_ON_STRICT_MISS", True)
+
     forward_source_commands: Dict[str, str] = field(default_factory=_custom_forward_source_commands)
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
     tz: str = os.getenv("TZ", "Asia/Yangon")
