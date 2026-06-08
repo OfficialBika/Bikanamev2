@@ -36,7 +36,6 @@ SUPPORTED_BOTS = [
     ("@roronoa_zoro_robot", "/challenge"),
     ("@character_picker_bot", "/pick"),
     ("@BikaCharacterBot", "/bika"),
-    ("@SenpaiCatcherBot", "/pick"),
 ]
 
 
