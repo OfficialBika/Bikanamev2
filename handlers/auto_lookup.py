@@ -4,6 +4,7 @@ import time
 
 from aiogram import F, Router
 from aiogram.types import Message
+from locales import en, my
 from services.force_join import require_join
 from services.group_access import can_auto_lookup, remember_user
 from services.lookup_service import lookup_service
@@ -85,6 +86,7 @@ async def auto_lookup(message: Message) -> None:
         return
 
     result = await lookup_service.lookup_message(message.bot, message, manual=False)
+
     if result.item:
         await safe_reply(
             message,
@@ -92,3 +94,9 @@ async def auto_lookup(message: Message) -> None:
             reply_markup=result_buttons(result.item),
             disable_web_page_preview=True,
         )
+        return
+
+    # Auto lookup မှာ DB ထဲ မတွေ့တဲ့ media တွေကို Not Found ပြန်ပို့မယ်။
+    # Duplicate dedupe / force-join / group access logic တွေကို မထိခိုက်အောင်
+    # lookup ပြီး result မရှိတဲ့ case မှာပဲ reply ပြန်ထားပါတယ်။
+    await safe_reply(message, f"{my.NOT_FOUND}\n{en.NOT_FOUND}")
