@@ -13,9 +13,15 @@ from utils.telegram_safe import safe_reply
 
 router = Router(name="auto_lookup")
 
-# Prevent duplicate auto-lookup replies for the same media/update in a short window.
-# This helps when Telegram sends duplicate updates, media albums are processed item-by-item,
-# or the same forwarded media is received twice very quickly.
+# Prevent duplicate auto-lookup replies for the same Telegram update/message.
+#
+# Important:
+# - We do NOT dedupe by file_unique_id, because two different users may send the
+#   same media and both users should get one reply each.
+# - Normal media uses chat_id + sender_id + message_id, so only the same duplicated
+#   update/message is skipped.
+# - Albums use chat_id + sender_id + media_group_id, so a single album send produces
+#   one auto-lookup reply, while another user sending the same media still gets a reply.
 _DEDUPE_TTL_SECONDS = 20
 _seen_auto_lookup: dict[str, float] = {}
 
@@ -26,31 +32,28 @@ def _cleanup_seen(now: float) -> None:
         _seen_auto_lookup.pop(key, None)
 
 
-def _file_unique_id_from_message(message: Message) -> str:
-    if message.photo:
-        return getattr(message.photo[-1], "file_unique_id", "") or getattr(message.photo[-1], "file_id", "") or ""
-    if message.video:
-        return getattr(message.video, "file_unique_id", "") or getattr(message.video, "file_id", "") or ""
-    if message.animation:
-        return getattr(message.animation, "file_unique_id", "") or getattr(message.animation, "file_id", "") or ""
-    if message.document:
-        return getattr(message.document, "file_unique_id", "") or getattr(message.document, "file_id", "") or ""
-    return ""
+def _chat_id(message: Message) -> int:
+    return int(getattr(message.chat, "id", 0) or 0)
+
+
+def _sender_id(message: Message) -> int:
+    if message.from_user:
+        return int(message.from_user.id)
+    sender_chat = getattr(message, "sender_chat", None)
+    if sender_chat and getattr(sender_chat, "id", None):
+        return int(sender_chat.id)
+    return 0
 
 
 def _media_unique_key(message: Message) -> str:
-    chat_id = getattr(message.chat, "id", 0) if message.chat else 0
+    chat_id = _chat_id(message)
+    sender_id = _sender_id(message)
 
-    # For Telegram albums, only auto-lookup the first item we receive from the same media_group_id.
     media_group_id = getattr(message, "media_group_id", None)
     if media_group_id:
-        return f"chat:{chat_id}:album:{media_group_id}"
+        return f"chat:{chat_id}:sender:{sender_id}:album:{media_group_id}"
 
-    file_uid = _file_unique_id_from_message(message)
-    if file_uid:
-        return f"chat:{chat_id}:file:{file_uid}"
-
-    return f"chat:{chat_id}:msg:{message.message_id}"
+    return f"chat:{chat_id}:sender:{sender_id}:msg:{message.message_id}"
 
 
 def _already_processed(message: Message) -> bool:
