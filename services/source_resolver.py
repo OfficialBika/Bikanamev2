@@ -6,13 +6,14 @@ from aiogram.types import Message
 from config import (
     BOT_SOURCE_COLLECTION,
     BOT_SOURCE_OUTPUT_COMMAND,
+    SOURCE_CHAT_ID_COLLECTION,
     COLLECTION_TO_OUTPUT_COMMAND,
     COMMAND_TO_COLLECTION,
     settings,
 )
 
 # Manual lookup commands. /loop is intentionally NOT included.
-MANUAL_COMMANDS = {"/waifu", "/w", ".wa", ".w", "/name", ".name", "/bika", "/loot"}
+MANUAL_COMMANDS = {"/waifu", "/w", ".wa", ".w", "/name", ".name", "/bika", "/loot", "/pick"}
 
 @dataclass(frozen=True)
 class LookupScope:
@@ -153,6 +154,9 @@ TITLE_SOURCE_COLLECTION = {
     "senpai catcher": "items_senpai_catcher",
     "senpai catcher bot": "items_senpai_catcher",
     "senpaicatcher": "items_senpai_catcher",
+    "senpai catcher db": "items_senpai_catcher",
+    "senpai catcher / db": "items_senpai_catcher",
+    "senpaibase": "items_senpai_catcher",
 }
 
 TITLE_OUTPUT_COMMAND = {
@@ -170,6 +174,9 @@ TITLE_OUTPUT_COMMAND = {
     "senpai catcher": "/pick",
     "senpai catcher bot": "/pick",
     "senpaicatcher": "/pick",
+    "senpai catcher db": "/pick",
+    "senpai catcher / db": "/pick",
+    "senpaibase": "/pick",
 }
 
 
@@ -274,6 +281,42 @@ def source_username(message: Message) -> str | None:
     return None
 
 
+
+def source_chat_id(message: Message) -> int | None:
+    """Return forwarded/source chat id when Telegram exposes it."""
+    origin = getattr(message, "forward_origin", None)
+
+    chat = getattr(origin, "chat", None) if origin else None
+    if chat and getattr(chat, "id", None):
+        try:
+            return int(chat.id)
+        except Exception:
+            pass
+
+    sender_chat = getattr(origin, "sender_chat", None) if origin else None
+    if sender_chat and getattr(sender_chat, "id", None):
+        try:
+            return int(sender_chat.id)
+        except Exception:
+            pass
+
+    fchat = getattr(message, "forward_from_chat", None)
+    if fchat and getattr(fchat, "id", None):
+        try:
+            return int(fchat.id)
+        except Exception:
+            pass
+
+    sender_chat = getattr(message, "sender_chat", None)
+    if sender_chat and getattr(sender_chat, "id", None):
+        try:
+            return int(sender_chat.id)
+        except Exception:
+            pass
+
+    return None
+
+
 def source_title(message: Message) -> str | None:
     origin = getattr(message, "forward_origin", None)
 
@@ -334,6 +377,10 @@ def _custom_source_command(message: Message) -> str | None:
 
 def resolve_source_collection(message: Message) -> str | None:
     """Resolve collection only from forward/direct source, not caption command."""
+    chat_id = source_chat_id(message)
+    if chat_id is not None and chat_id in SOURCE_CHAT_ID_COLLECTION:
+        return SOURCE_CHAT_ID_COLLECTION[chat_id]
+
     username = source_username(message)
     if username and username in BOT_SOURCE_COLLECTION:
         return BOT_SOURCE_COLLECTION[username]

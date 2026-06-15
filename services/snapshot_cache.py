@@ -65,6 +65,8 @@ class SnapshotCache:
         self.by_collection: Dict[str, List[ItemSnapshot]] = {}
         self.file_uid: Dict[str, ItemSnapshot] = {}
         self.sha256: Dict[str, ItemSnapshot] = {}
+        self.file_uid_by_collection: Dict[str, Dict[str, ItemSnapshot]] = {}
+        self.sha256_by_collection: Dict[str, Dict[str, ItemSnapshot]] = {}
         self.photos_by_collection: Dict[str, List[ItemSnapshot]] = {}
         self.videos_by_collection: Dict[str, List[ItemSnapshot]] = {}
 
@@ -73,6 +75,8 @@ class SnapshotCache:
         new_by_collection: Dict[str, List[ItemSnapshot]] = {}
         new_file_uid: Dict[str, ItemSnapshot] = {}
         new_sha256: Dict[str, ItemSnapshot] = {}
+        new_file_uid_by_collection: Dict[str, Dict[str, ItemSnapshot]] = {}
+        new_sha256_by_collection: Dict[str, Dict[str, ItemSnapshot]] = {}
         new_photos: Dict[str, List[ItemSnapshot]] = {}
         new_videos: Dict[str, List[ItemSnapshot]] = {}
         projection = {
@@ -108,8 +112,10 @@ class SnapshotCache:
                     total += 1
                     if item.file_unique_id:
                         new_file_uid[item.file_unique_id] = item
+                        new_file_uid_by_collection.setdefault(collection, {})[item.file_unique_id] = item
                     if item.sha256:
                         new_sha256[item.sha256] = item
+                        new_sha256_by_collection.setdefault(collection, {})[item.sha256] = item
                     if item.phash or media_type == "photo":
                         new_photos.setdefault(collection, []).append(item)
                     if item.frame_hashes or media_type == "video":
@@ -122,6 +128,8 @@ class SnapshotCache:
             self.by_collection = new_by_collection
             self.file_uid = new_file_uid
             self.sha256 = new_sha256
+            self.file_uid_by_collection = new_file_uid_by_collection
+            self.sha256_by_collection = new_sha256_by_collection
             self.photos_by_collection = new_photos
             self.videos_by_collection = new_videos
             self.loaded_at = time.time()
