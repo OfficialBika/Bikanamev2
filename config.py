@@ -106,20 +106,12 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@character_picker_bot": "items_character_picker",
     "@bikacharacterbot": "items_bika_character",
     "@senpaicatcherbot": "items_senpai_catcher",
-    "@senpaibase": "items_senpai_catcher",
-}
-
-
-# Fixed forward channel/chat-id mapping for sources that hide usernames.
-SOURCE_CHAT_ID_COLLECTION: Dict[int, str] = {
-    -1003218799804: "items_senpai_catcher",  # @SenpaiBase / SenpaiCatcher DB
 }
 
 # Some bots share a database collection but need a different command in the result.
 # @CharacterLootBot uses the Seizer database collection, but users should copy /loot.
 BOT_SOURCE_OUTPUT_COMMAND: Dict[str, str] = {
     "@characterlootbot": "/loot",
-    "@senpaibase": "/pick",
 }
 
 # These commands should return only the name/hint/full.
@@ -181,12 +173,12 @@ class Settings:
     enable_copy_buttons: bool = _bool("ENABLE_COPY_BUTTONS", True)
     fast_reply_mode: bool = _bool("FAST_REPLY_MODE", False)
 
-    snapshot_refresh_seconds: int = _int("SNAPSHOT_REFRESH_SECONDS", 300)
+    snapshot_refresh_seconds: int = _int("SNAPSHOT_REFRESH_SECONDS", 60)
     snapshot_startup_load: bool = _bool("SNAPSHOT_STARTUP_LOAD", True)
     snapshot_background_refresh: bool = _bool("SNAPSHOT_BACKGROUND_REFRESH", True)
-    result_cache_max_items: int = _int("RESULT_CACHE_MAX_ITEMS", 50000)
-    result_cache_ttl_seconds: int = _int("RESULT_CACHE_TTL_SECONDS", 7200)
-    miss_cache_ttl_seconds: int = _int("MISS_CACHE_TTL_SECONDS", 300)
+    result_cache_max_items: int = _int("RESULT_CACHE_MAX_ITEMS", 5000)
+    result_cache_ttl_seconds: int = _int("RESULT_CACHE_TTL_SECONDS", 600)
+    miss_cache_ttl_seconds: int = _int("MISS_CACHE_TTL_SECONDS", 60)
 
     photo_phash_threshold: int = _int("PHOTO_PHASH_THRESHOLD", 8)
     video_frame_threshold: int = _int("VIDEO_FRAME_THRESHOLD", 10)
@@ -195,7 +187,7 @@ class Settings:
 
     max_concurrent_downloads: int = _int("MAX_CONCURRENT_DOWNLOADS", 20)
     max_concurrent_lookups: int = _int("MAX_CONCURRENT_LOOKUPS", 50)
-    download_timeout_seconds: int = _int("DOWNLOAD_TIMEOUT_SECONDS", 5)
+    download_timeout_seconds: int = _int("DOWNLOAD_TIMEOUT_SECONDS", 8)
 
     # Lookup speed optimization:
     # - source/forward known => search only that source collection first
@@ -203,8 +195,7 @@ class Settings:
     # - optional fallback keeps old all-database search behavior if strict scope misses
     strict_forward_source_lookup: bool = _bool("STRICT_FORWARD_SOURCE_LOOKUP", True)
     strict_command_lookup: bool = _bool("STRICT_COMMAND_LOOKUP", True)
-    fallback_all_on_strict_miss: bool = _bool("FALLBACK_ALL_ON_STRICT_MISS", False)
-    require_lookup_scope: bool = _bool("REQUIRE_LOOKUP_SCOPE", True)
+    fallback_all_on_strict_miss: bool = _bool("FALLBACK_ALL_ON_STRICT_MISS", True)
 
     forward_source_commands: Dict[str, str] = field(default_factory=_custom_forward_source_commands)
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
