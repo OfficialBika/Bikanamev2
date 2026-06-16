@@ -60,12 +60,6 @@ class LookupService:
                     collection_filter[0] if collection_filter and len(collection_filter) == 1 else None,
                 )
 
-                # Strict source mode:
-                # If the media has no trusted source/command scope, do NOT search all collections.
-                # This prevents wrong-source matches and also avoids expensive download/hash work.
-                if settings.require_lookup_scope and not collection_filter:
-                    return self._done(None, "scope_missing", t0)
-
                 file_uid = getattr(media.obj, "file_unique_id", None)
                 filter_tag = self._filter_tag(collection_filter)
 
@@ -85,7 +79,7 @@ class LookupService:
                     return self._done(None, "download_failed", t0)
 
                 mh = await asyncio.to_thread(hash_photo if media.media_type == "photo" else hash_video, data)
-                cache_key = f"sha:{filter_tag}:{mh.sha256}" if mh.sha256 else (f"uid:{filter_tag}:{file_uid}" if file_uid else "")
+                cache_key = f"sha:{mh.sha256}" if mh.sha256 else (f"uid:{file_uid}" if file_uid else "")
                 miss_key = f"{cache_key}:{filter_tag}" if cache_key else ""
 
                 if cache_key:
@@ -103,12 +97,41 @@ class LookupService:
                     if cache_key:
                         self.result_cache.set(cache_key, item)
                     if file_uid:
-                        self.result_cache.set(f"uid:{filter_tag}:{file_uid}", item)
+                        self.result_cache.set(f"uid:{file_uid}", item)
                     output_command = output_command_from_message(source_message, item.collection) or output_command
                     return self._done(self._with_command(item, output_command), "hash", t0)
 
-                # Strict mode: no all-collection fallback. If the resolved source/command
-                # scope misses, return Not Found immediately.
+                # Optional compatibility fallback:
+                # Fast path searches only the resolved source/command collection(s).
+                # If it misses and fallback is enabled, reuse the same downloaded hash
+                # and try all collections once without re-downloading media.
+                if collection_filter and settings.fallback_all_on_strict_miss:
+                    fallback_item = None
+
+                    if file_uid:
+                        fallback_item = self._lookup_uid(file_uid, None)
+
+                    if not fallback_item and cache_key:
+                        cached_any = self.result_cache.get(cache_key)
+                        if cached_any:
+                            fallback_item = cached_any
+
+                    if not fallback_item:
+                        fallback_item = self._match_hash(mh, media.media_type, None)
+
+                    if fallback_item:
+                        hit = True
+                        if cache_key:
+                            self.result_cache.set(cache_key, fallback_item)
+                        if file_uid:
+                            self.result_cache.set(f"uid:{file_uid}", fallback_item)
+                        fallback_command = output_command_from_message(source_message, fallback_item.collection) or output_command
+                        return self._done(
+                            self._with_command(fallback_item, fallback_command),
+                            f"{scope.mode}_fallback_hash",
+                            t0,
+                        )
+
                 if miss_key:
                     self.miss_cache.set(miss_key, True)
                 if file_uid:
@@ -139,23 +162,13 @@ class LookupService:
         return not collection_filter or collection in collection_filter
 
     def _lookup_uid(self, file_uid: str, collection_filter: CollectionFilter) -> ItemSnapshot | None:
-        filter_tag = self._filter_tag(collection_filter)
-        cached = self.result_cache.get(f"uid:{filter_tag}:{file_uid}") or self.result_cache.get(f"uid:{file_uid}")
+        cached = self.result_cache.get(f"uid:{file_uid}")
         if cached and self._matches_filter(cached.collection, collection_filter):
             return cached
 
-        if collection_filter:
-            for collection in collection_filter:
-                item = snapshot.file_uid_by_collection.get(collection, {}).get(file_uid)
-                if item:
-                    self.result_cache.set(f"uid:{filter_tag}:{file_uid}", item)
-                    return item
-            return None
-
         item = snapshot.file_uid.get(file_uid)
-        if item:
-            self.result_cache.set(f"uid:{filter_tag}:{file_uid}", item)
-            self.result_cache.set(f"uid:{filter_tag}:{file_uid}", item)
+        if item and self._matches_filter(item.collection, collection_filter):
+            self.result_cache.set(f"uid:{file_uid}", item)
             return item
         return None
 
@@ -186,17 +199,12 @@ class LookupService:
 
     def _match_hash(self, mh: MediaHash, media_type: str, collection_filter: CollectionFilter) -> ItemSnapshot | None:
         if mh.sha256:
-            if collection_filter:
-                for collection in collection_filter:
-                    exact = snapshot.sha256_by_collection.get(collection, {}).get(mh.sha256)
-                    if exact:
-                        return exact
-            else:
-                exact = snapshot.sha256.get(mh.sha256)
-                if exact:
-                    return exact
+            exact = snapshot.sha256.get(mh.sha256)
+            if exact and self._matches_filter(exact.collection, collection_filter):
+                return exact
 
-            # Fallback inside the already-resolved source/command candidate list only.
+            # If the global sha256 map was overwritten by the same media in another collection,
+            # still check the filtered candidates so source/command lookup can find the right item.
             for item in self._candidates(collection_filter, media_type):
                 if item.sha256 and item.sha256 == mh.sha256:
                     return item
