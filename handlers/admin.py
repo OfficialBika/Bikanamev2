@@ -3,7 +3,7 @@ from __future__ import annotations
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-from services.group_access import is_owner_or_sudo, set_group_approved
+from services.group_access import is_owner_or_sudo, set_group_approved, remember_group_from_message
 from services.snapshot_cache import snapshot
 from utils.telegram_safe import safe_reply
 
@@ -17,7 +17,8 @@ async def gapprove(message: Message) -> None:
     if message.chat.type == "private":
         await safe_reply(message, "Use /gapprove inside the target group.")
         return
-    await set_group_approved(message.chat.id, True)
+    await remember_group_from_message(message)
+    await set_group_approved(message.chat.id, True, message=message)
     await safe_reply(message, "✅ This group is approved for auto lookup.")
 
 
@@ -28,7 +29,8 @@ async def gunapprove(message: Message) -> None:
     if message.chat.type == "private":
         await safe_reply(message, "Use /gunapprove inside the target group.")
         return
-    await set_group_approved(message.chat.id, False)
+    await remember_group_from_message(message)
+    await set_group_approved(message.chat.id, False, message=message)
     await safe_reply(message, "✅ This group is removed from auto lookup.")
 
 

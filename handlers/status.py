@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from aiogram import Router
 from aiogram.filters import Command
@@ -68,7 +69,6 @@ def _uptime() -> str:
 
 
 def _snapshot_total() -> int:
-    # Use actual loaded item count, not len(file_uid), because duplicate file_unique_id can overwrite map entries.
     try:
         return int(snapshot.count)
     except Exception:
@@ -124,6 +124,35 @@ async def _count_gapproved() -> int:
         return 0
 
 
+async def _count_known_groups_robust() -> int:
+    """Count known groups plus existing gapproved group keys.
+
+    This fixes Total Groups=0 on old DBs where groups were approved in settings
+    but never inserted into known_groups.
+    """
+    try:
+        db = get_db()
+        group_ids: set[int] = set()
+
+        async for doc in db["known_groups"].find({}, {"chat_id": 1, "group_id": 1}):
+            raw_id = doc.get("chat_id") or doc.get("group_id")
+            try:
+                if raw_id is not None:
+                    group_ids.add(int(raw_id))
+            except Exception:
+                pass
+
+        async for doc in db["settings"].find({"key": {"$regex": r"^gapprove:"}, "enabled": True}, {"key": 1}):
+            key = str(doc.get("key") or "")
+            match = re.match(r"^gapprove:(-?\d+)$", key)
+            if match:
+                group_ids.add(int(match.group(1)))
+
+        return len(group_ids)
+    except Exception:
+        return 0
+
+
 async def _db_ping_ms() -> float | None:
     try:
         db = get_db()
@@ -164,9 +193,8 @@ def _ram_info() -> tuple[str, str, str]:
 
 
 async def build_status_text(message: Message) -> str:
-    # Public /status: keep it fast. It still shows DB counts, but each count function safely returns 0 on error.
     known_users = await _count_collection("known_users")
-    known_groups = await _count_collection("known_groups")
+    known_groups = await _count_known_groups_robust()
     gapproved = await _count_gapproved()
     blacklisted = await _count_collection("blacklisted_users")
     bot_ping = await _bot_ping_ms(message)
