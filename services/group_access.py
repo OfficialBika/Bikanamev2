@@ -19,7 +19,49 @@ async def remember_user(user_id: int | None, username: str | None = None) -> Non
     db = get_db()
     await db["known_users"].update_one(
         {"user_id": user_id},
-        {"$set": {"user_id": user_id, "username": username, "updated_at": time.time()}, "$setOnInsert": {"created_at": time.time()}},
+        {
+            "$set": {
+                "user_id": user_id,
+                "username": username or "",
+                "updated_at": time.time(),
+            },
+            "$setOnInsert": {"created_at": time.time()},
+        },
+        upsert=True,
+    )
+
+
+async def remember_group_from_message(message: Message | None) -> None:
+    """Save group/supergroup/channel chat info for /status Total Groups.
+
+    Before this fix the status command counted the known_groups collection,
+    but normal group messages and /gapprove never inserted group docs there.
+    """
+    if not message or not getattr(message, "chat", None):
+        return
+
+    chat = message.chat
+    chat_type = str(getattr(chat, "type", "") or "")
+    if chat_type == "private":
+        return
+
+    chat_id = int(getattr(chat, "id", 0) or 0)
+    if not chat_id:
+        return
+
+    db = get_db()
+    await db["known_groups"].update_one(
+        {"chat_id": chat_id},
+        {
+            "$set": {
+                "chat_id": chat_id,
+                "title": getattr(chat, "title", "") or "",
+                "username": getattr(chat, "username", "") or "",
+                "type": chat_type,
+                "updated_at": time.time(),
+            },
+            "$setOnInsert": {"created_at": time.time()},
+        },
         upsert=True,
     )
 
@@ -39,8 +81,10 @@ async def is_approved_group(chat_id: int) -> bool:
     return ok
 
 
-async def set_group_approved(chat_id: int, enabled: bool = True) -> None:
+async def set_group_approved(chat_id: int, enabled: bool = True, message: Message | None = None) -> None:
     db = get_db()
+    if message is not None:
+        await remember_group_from_message(message)
     await db["settings"].update_one(
         {"key": f"gapprove:{chat_id}"},
         {"$set": {"enabled": enabled, "updated_at": time.time()}},
@@ -50,6 +94,10 @@ async def set_group_approved(chat_id: int, enabled: bool = True) -> None:
 
 
 async def can_auto_lookup(message: Message) -> bool:
+    # Always remember every group that interacts with the bot.
+    # This makes /status → Total Groups accurate.
+    await remember_group_from_message(message)
+
     if not settings.auto_lookup_enabled:
         return False
     if message.chat.type == "private":
