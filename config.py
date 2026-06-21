@@ -100,12 +100,23 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@catch_your_husbando_bot": "items_catch_your_husbando",
     "@smash_character_bot": "items_smash_character",
     "@waifuxgrabbot": "items_waifux_grab",
+    "@waifuxgrab_database": "items_waifux_grab",
+    "@waifuxgrabdb": "items_waifux_grab",
     "@catch_your_waifu_bot": "items_catch_your_waifu",
     "@waifu_grabber_bot": "items_waifu_grabber",
     "@roronoa_zoro_robot": "items_roronoa_zoro",
     "@character_picker_bot": "items_character_picker",
     "@bikacharacterbot": "items_bika_character",
     "@senpaicatcherbot": "items_senpai_catcher",
+    "@senpaibase": "items_senpai_catcher",
+}
+
+# Strong source channel IDs. Add more IDs here if Telegram hides username/title.
+BOT_SOURCE_CHAT_ID: Dict[int, str] = {
+    # SenpaiCatcher / DB
+    -1003218799804: "items_senpai_catcher",
+    # Bika Waifu Database
+    -1003923540741: "items_bika_character",
 }
 
 # Some bots share a database collection but need a different command in the result.
@@ -118,7 +129,7 @@ BOT_SOURCE_OUTPUT_COMMAND: Dict[str, str] = {
 # ID and rarity are intentionally hidden for Capture, Seizer and Loot results.
 HIDE_ID_RARITY_COMMANDS: Set[str] = {"/capture", "/seize", "/loot", "/challenge"}
 
-SYSTEM_COLLECTIONS = {"sudo_users", "known_users", "user_modes", "settings", "items"}
+SYSTEM_COLLECTIONS = {"sudo_users", "known_users", "known_groups", "user_modes", "settings", "items"}
 
 
 def _custom_forward_source_commands() -> Dict[str, str]:
@@ -195,7 +206,19 @@ class Settings:
     # - optional fallback keeps old all-database search behavior if strict scope misses
     strict_forward_source_lookup: bool = _bool("STRICT_FORWARD_SOURCE_LOOKUP", True)
     strict_command_lookup: bool = _bool("STRICT_COMMAND_LOOKUP", True)
-    fallback_all_on_strict_miss: bool = _bool("FALLBACK_ALL_ON_STRICT_MISS", True)
+    fallback_all_on_strict_miss: bool = _bool("FALLBACK_ALL_ON_STRICT_MISS", False)
+    require_lookup_scope: bool = _bool("REQUIRE_LOOKUP_SCOPE", True)
+    # False means UID miss can still try source-scoped sha256/phash fallback.
+    # This is slower than UID-only but fixes old DB/media where file_unique_id is missing or changed.
+    strict_exact_lookup_only: bool = _bool("STRICT_EXACT_LOOKUP_ONLY", False)
+    enable_hash_fallback: bool = _bool("ENABLE_HASH_FALLBACK", True)
+
+    auto_lookup_reply_not_found: bool = _bool("AUTO_LOOKUP_REPLY_NOT_FOUND", True)
+    auto_lookup_dedupe_album: bool = _bool("AUTO_LOOKUP_DEDUPE_ALBUM", False)
+    auto_lookup_dedupe_ttl_seconds: int = _int("AUTO_LOOKUP_DEDUPE_TTL_SECONDS", 20)
+
+    force_join_positive_cache_seconds: int = _int("FORCE_JOIN_POSITIVE_CACHE_SECONDS", 86400)
+    force_join_prompt_throttle_seconds: int = _int("FORCE_JOIN_PROMPT_THROTTLE_SECONDS", 60)
 
     forward_source_commands: Dict[str, str] = field(default_factory=_custom_forward_source_commands)
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
