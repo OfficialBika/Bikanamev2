@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import os
 import time
 from dataclasses import dataclass, replace
 from typing import Iterable
@@ -31,18 +32,16 @@ class LookupResult:
 
 
 class LookupService:
-    """Fast source-scoped lookup service.
+    """Fast and accurate source-scoped lookup service.
 
-    Main goal:
-    - source/command scope သိရင် အဲဒီ collection ထဲမှာပဲ file_unique_id နဲ့ အရင်ရှာမယ်
-    - source ထဲမှာမရှိရင် all collections fallback မလုပ်ဘဲ Not Found ပြန်မယ်
-    - Telegram media download/hash ကို default မလုပ်ဘူး၊ ဒါကြောင့် timeout/response delay မဖြစ်တော့ဘူး
-
-    Optional env override:
-    - REQUIRE_LOOKUP_SCOPE=true              # source/command မသိရင် Not Found
-    - STRICT_EXACT_LOOKUP_ONLY=true          # source scoped UID miss ဆို Not Found immediately
-    - ENABLE_HASH_FALLBACK=false             # true လုပ်မှ download + hash fallback သုံးမယ်
-    - FALLBACK_ALL_ON_STRICT_MISS=false      # all collections fallback ပိတ်
+    Behavior:
+    - Auto lookup resolves source by bot/channel username/title/chat-id first.
+    - If source is unknown, it reads command in forwarded caption/text and searches only
+      the command collection(s), not the whole database.
+    - Manual lookup prefers replied media source, then command-message scope as fallback.
+    - file_unique_id is always the fastest path.
+    - If UID misses, optional hash fallback searches only the resolved scope.
+    - All-collection fallback is disabled by default.
     """
 
     def __init__(self) -> None:
@@ -69,23 +68,33 @@ class LookupService:
 
                 source_message = media.source_message
                 scope = resolve_lookup_scope(source_message)
+
+                # Manual command is often a reply to media. Prefer the media/forward source.
+                # If the media has no source/cmd, use the command message itself (/bika, /pick, /loot).
+                if manual and not scope.collections:
+                    manual_scope = resolve_lookup_scope(message)
+                    if manual_scope.collections:
+                        scope = manual_scope
+
                 collection_filter = scope.collections
                 filter_tag = self._filter_tag(collection_filter)
 
-                # Strong strict behavior requested by owner:
-                # unsupported/unknown source => do not scan all DB; answer Not Found fast.
-                require_scope = self._setting_bool("require_lookup_scope", True)
-                if require_scope and not collection_filter:
+                if self._setting_bool("require_lookup_scope", True) and not collection_filter:
                     return self._done(None, "no_scope", t0)
 
                 output_command = output_command_from_message(
                     source_message,
                     collection_filter[0] if collection_filter and len(collection_filter) == 1 else None,
                 )
+                if manual and not output_command:
+                    output_command = output_command_from_message(
+                        message,
+                        collection_filter[0] if collection_filter and len(collection_filter) == 1 else None,
+                    )
 
                 file_uid = getattr(media.obj, "file_unique_id", None) or ""
 
-                # 1) Fastest path: exact file_unique_id in resolved source collection(s).
+                # 1) Exact UID lookup inside resolved source/command scope.
                 if file_uid:
                     item = self._lookup_uid(file_uid, collection_filter)
                     if item:
@@ -94,28 +103,28 @@ class LookupService:
 
                     miss_uid_key = f"uid:{filter_tag}:{file_uid}"
                     if self.miss_cache.get(miss_uid_key):
-                        return self._done(None, "miss_cache_uid", t0)
+                        # Miss cache means this exact scope+uid was already checked recently.
+                        # If strict exact mode is OFF and hash fallback is ON, still skip only when hash miss was cached too.
+                        if self._setting_bool("strict_exact_lookup_only", False) or not self._setting_bool("enable_hash_fallback", True):
+                            return self._done(None, "miss_cache_uid", t0)
 
-                    # If we have a reliable source/command scope and the UID is not in that scope,
-                    # stop here. This prevents slow Telegram download/hash timeouts.
-                    if collection_filter and self._setting_bool("strict_exact_lookup_only", True):
+                    if collection_filter and self._setting_bool("strict_exact_lookup_only", False):
                         self.miss_cache.set(miss_uid_key, True)
                         return self._done(None, "not_found_source_uid", t0)
-
                 else:
-                    # Telegram media should normally have file_unique_id. If missing, do not download
-                    # unless hash fallback is explicitly enabled.
-                    if self._setting_bool("strict_exact_lookup_only", True):
+                    if self._setting_bool("strict_exact_lookup_only", False):
                         return self._done(None, "no_file_unique_id", t0)
 
-                # 2) Optional hash fallback. Disabled by default for speed and no-timeout behavior.
-                if not self._setting_bool("enable_hash_fallback", False):
+                # 2) Optional source-scoped hash fallback for old DB/media where UID misses.
+                if not self._setting_bool("enable_hash_fallback", True):
                     if file_uid:
                         self.miss_cache.set(f"uid:{filter_tag}:{file_uid}", True)
                     return self._done(None, "not_found_no_hash_fallback", t0)
 
-                data = await self._download(bot, getattr(media.obj, "file_id"))
+                data = await self._download(bot, getattr(media.obj, "file_id", ""))
                 if not data:
+                    if file_uid:
+                        self.miss_cache.set(f"uid:{filter_tag}:{file_uid}", True)
                     return self._done(None, "download_failed", t0)
 
                 mh = await asyncio.to_thread(hash_photo if media.media_type == "photo" else hash_video, data)
@@ -142,12 +151,8 @@ class LookupService:
                     output_command = output_command_from_message(source_message, item.collection) or output_command
                     return self._done(self._with_command(item, output_command), "hash", t0)
 
-                # No fallback to all collections unless explicitly enabled. Default: disabled.
-                if (
-                    collection_filter
-                    and self._setting_bool("fallback_all_on_strict_miss", False)
-                    and not self._setting_bool("strict_exact_lookup_only", True)
-                ):
+                # 3) Compatibility fallback to all DB is explicitly disabled by default.
+                if collection_filter and self._setting_bool("fallback_all_on_strict_miss", False):
                     fallback_item = self._lookup_uid(file_uid, None) if file_uid else None
                     if not fallback_item:
                         fallback_item = self._match_hash(mh, media.media_type, None)
@@ -174,9 +179,10 @@ class LookupService:
             perf.lookup.record(elapsed, hit=hit, error=error)
 
     def _setting_bool(self, name: str, default: bool) -> bool:
-        # config.py dataclass fields are lower-case. Keep env-compatible names too.
-        candidates = [name, name.lower(), name.upper()]
-        for key in candidates:
+        env_val = os.getenv(name.upper())
+        if env_val is not None:
+            return env_val.strip().lower() in {"1", "true", "yes", "y", "on"}
+        for key in (name, name.lower(), name.upper()):
             if hasattr(settings, key):
                 return bool(getattr(settings, key))
         return default
@@ -190,17 +196,16 @@ class LookupService:
         return LookupResult(item=item, reason=reason, elapsed_ms=(time.perf_counter() - t0) * 1000)
 
     def _filter_tag(self, collection_filter: CollectionFilter) -> str:
-        if not collection_filter:
-            return "all"
-        return "+".join(collection_filter)
+        return "+".join(collection_filter) if collection_filter else "all"
 
     def _matches_filter(self, collection: str, collection_filter: CollectionFilter) -> bool:
         return not collection_filter or collection in collection_filter
 
     def _lookup_uid(self, file_uid: str, collection_filter: CollectionFilter) -> ItemSnapshot | None:
+        if not file_uid:
+            return None
         filter_tag = self._filter_tag(collection_filter)
 
-        # Filter-specific cache first, so same UID in another collection cannot leak into this source.
         cached = self.result_cache.get(f"uid:{filter_tag}:{file_uid}")
         if cached and self._matches_filter(cached.collection, collection_filter):
             return cached
@@ -210,7 +215,7 @@ class LookupService:
             self.result_cache.set(f"uid:{filter_tag}:{file_uid}", cached)
             return cached
 
-        # Newer snapshot_cache may provide O(1) per-collection maps.
+        # O(1) per-collection maps from improved snapshot_cache.py.
         by_col = getattr(snapshot, "file_uid_by_collection", None)
         if by_col and collection_filter:
             for collection in collection_filter:
@@ -220,8 +225,7 @@ class LookupService:
                     self.result_cache.set(f"uid:{file_uid}", item)
                     return item
 
-        # Current uploaded snapshot_cache has only global map. If global map points to another
-        # collection, scan only the scoped collection list to find the correct item.
+        # Backward-compatible scoped scan if snapshot_cache.py is old.
         if collection_filter:
             for collection in collection_filter:
                 for item in getattr(snapshot, "by_collection", {}).get(collection, []):
@@ -238,6 +242,8 @@ class LookupService:
         return None
 
     async def _download(self, bot: Bot, file_id: str) -> bytes | None:
+        if not file_id:
+            return None
         async with self.download_sem:
             try:
                 bio = await asyncio.wait_for(bot.download(file_id), timeout=settings.download_timeout_seconds)
@@ -247,7 +253,6 @@ class LookupService:
                     return bio.read()
                 return None
             except asyncio.TimeoutError:
-                # Avoid huge traceback spam in PM2 logs. Lookup will return Not Found/Download failed.
                 log.info("download timeout after %ss", settings.download_timeout_seconds)
                 return None
             except asyncio.CancelledError:
@@ -257,9 +262,7 @@ class LookupService:
                 return None
 
     def _candidate_collections(self, collection_filter: CollectionFilter) -> Iterable[str]:
-        if collection_filter:
-            return collection_filter
-        return all_lookup_collections()
+        return collection_filter or all_lookup_collections()
 
     def _candidates(self, collection_filter: CollectionFilter, media_type: str) -> list[ItemSnapshot]:
         source = snapshot.photos_by_collection if media_type == "photo" else snapshot.videos_by_collection

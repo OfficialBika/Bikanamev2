@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+import unicodedata
 from aiogram.types import Message
 from config import (
     BOT_SOURCE_COLLECTION,
@@ -11,31 +12,38 @@ from config import (
     settings,
 )
 
+# Optional in newer config.py. Keep backward compatible with old config files.
+try:
+    from config import BOT_SOURCE_CHAT_ID  # type: ignore
+except Exception:  # pragma: no cover
+    BOT_SOURCE_CHAT_ID = {}
+
 # Manual lookup commands. /loop is intentionally NOT included.
-MANUAL_COMMANDS = {"/waifu", "/w", ".wa", ".w", "/name", ".name", "/bika", "/loot"}
+MANUAL_COMMANDS = {"/waifu", "/w", ".wa", ".w", "/name", ".name", "/bika", "/loot", "/pick"}
+
 
 @dataclass(frozen=True)
 class LookupScope:
     """Resolved lookup scope for fast source/command-aware search.
 
-    mode:
-      - "source": forward/direct/via-bot source resolved to one collection
-      - "command": caption/text command resolved to one or more collections
-      - "all": no reliable source/command scope
+    Priority required by owner:
+      1) Bot/source username or title/chat id -> exact source collection
+      2) If source is unknown, use command inside forwarded caption/text -> command collection(s)
+      3) If still unknown, no scope. lookup_service returns Not Found when REQUIRE_LOOKUP_SCOPE=true.
     """
+
     collections: list[str] | None
     mode: str
     command: str | None = None
     source_collection: str | None = None
     strict: bool = False
     confident: bool = False
+    source_label: str | None = None
 
 
-USING_RE = re.compile(r"(?:using|use|hint|full)\s*[:：]?\s*(/[a-zA-Z_]+)", re.I)
-CMD_RE = re.compile(r"(^|\s)(/[a-zA-Z_]+)(?=\s|$)")
+USING_RE = re.compile(r"(?:using|use|hint|full|cmd|command)\s*[:：\-=]?\s*(/[a-zA-Z0-9_]+)(?:@[A-Za-z0-9_]+)?", re.I)
+CMD_RE = re.compile(r"(^|\s)(/[a-zA-Z0-9_]+)(?:@[A-Za-z0-9_]+)?(?=\s|$|[^A-Za-z0-9_@])", re.I)
 
-# Fixed lookup order for fallback all-database search.
-# Order follows the user's supported bot list 1 -> 14.
 LOOKUP_COLLECTION_ORDER: list[str] = [
     "items_character_catcher",
     "items_characters_hallow",
@@ -56,8 +64,7 @@ LOOKUP_COLLECTION_ORDER: list[str] = [
     "items_senpai_catcher",
 ]
 
-# Commands that may map to more than one collection.
-# Source has priority over these command groups.
+# Commands that may map to more than one collection. Source has priority over these groups.
 COMMAND_TO_COLLECTIONS: dict[str, list[str]] = {
     "/catch": ["items_character_catcher"],
     "/hallow": ["items_characters_hallow"],
@@ -76,20 +83,30 @@ COMMAND_TO_COLLECTIONS: dict[str, list[str]] = {
         "items_waifux_grab",
         "items_waifu_grabber",
     ],
-    "/guess": [
-        "items_catch_your_husbando",
-        "items_catch_your_waifu",
-    ],
+    "/guess": ["items_catch_your_husbando", "items_catch_your_waifu"],
 }
 
-# Telegram forward display title/name based mapping.
-# This fixes forwarded messages where username may not be available.
+STYLIZED_LATIN_TRANSLATION = str.maketrans({
+    "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ꜰ": "f",
+    "ɢ": "g", "ʜ": "h", "ɪ": "i", "ᴊ": "j", "ᴋ": "k", "ʟ": "l",
+    "ᴍ": "m", "ɴ": "n", "ᴏ": "o", "ᴘ": "p", "ʀ": "r", "ꜱ": "s",
+    "ᴛ": "t", "ᴜ": "u", "ᴠ": "v", "ᴡ": "w", "ʏ": "y", "ᴢ": "z",
+})
+
+
+def _norm_text(value: str | None) -> str:
+    value = unicodedata.normalize("NFKC", value or "").translate(STYLIZED_LATIN_TRANSLATION)
+    return value
+
+
 TITLE_SOURCE_COLLECTION = {
+    # Character Catcher
     "character catcher": "items_character_catcher",
     "character catcher bot": "items_character_catcher",
     "characters catcher": "items_character_catcher",
     "characters catcher bot": "items_character_catcher",
 
+    # Hallow
     "character hallow": "items_characters_hallow",
     "character hallow bot": "items_characters_hallow",
     "characters hallow": "items_characters_hallow",
@@ -97,52 +114,51 @@ TITLE_SOURCE_COLLECTION = {
     "hallow upload": "items_characters_hallow",
     "hallow uploads": "items_characters_hallow",
 
+    # Capture / Loot
     "capture character": "items_capture_character",
     "character capture": "items_capture_character",
     "character capture bot": "items_capture_character",
     "capture database": "items_capture_character",
-
-    "character seizer": "items_character_seizer",
-    "character seizer bot": "items_character_seizer",
-    "character seize": "items_character_seizer",
-    "character seize bot": "items_character_seizer",
-    "seizer database": "items_character_seizer",
     "character loot": "items_capture_character",
     "character loot bot": "items_capture_character",
     "character looter": "items_capture_character",
     "character looter bot": "items_capture_character",
 
+    # Seizer
+    "character seizer": "items_character_seizer",
+    "character seizer bot": "items_character_seizer",
+    "character seize": "items_character_seizer",
+    "character seize bot": "items_character_seizer",
+    "seizer database": "items_character_seizer",
+
+    # Grab family
     "husbando grabber": "items_husbando_grabber",
     "husbando grabber bot": "items_husbando_grabber",
-    "ʜᴜsʙᴀɴᴅᴏ ɢʀᴀʙʙᴇʀ": "items_husbando_grabber",
-    "ʜᴜsʙᴀɴᴅᴏ ɢʀᴀʙʙᴇʀ ʙᴏᴛ": "items_husbando_grabber",
-
     "grab your waifu": "items_grab_your_waifu",
     "grab your waifu bot": "items_grab_your_waifu",
     "grab your husbando": "items_grab_your_husbando",
     "grab your husbando bot": "items_grab_your_husbando",
+    "waifuxgrab": "items_waifux_grab",
+    "waifux grab": "items_waifux_grab",
+    "waifuxgrab database": "items_waifux_grab",
+    "waifuxgrab_database": "items_waifux_grab",
+    "waifuxgrab db": "items_waifux_grab",
+    "grab garden": "items_waifux_grab",
+    "waifu grabber": "items_waifu_grabber",
+    "waifu grabber bot": "items_waifu_grabber",
 
+    # Others
     "takers bot": "items_takers_character",
     "takers character": "items_takers_character",
     "takers character bot": "items_takers_character",
-
     "catch your husbando": "items_catch_your_husbando",
     "catch your husbando bot": "items_catch_your_husbando",
+    "catch your waifu": "items_catch_your_waifu",
+    "catch your waifu bot": "items_catch_your_waifu",
     "smash your character": "items_smash_character",
     "smash your character bot": "items_smash_character",
     "smash character": "items_smash_character",
     "smash character bot": "items_smash_character",
-
-    "grab garden": "items_waifux_grab",
-    "waifux grab": "items_waifux_grab",
-    "waifuxgrab": "items_waifux_grab",
-
-    "catch your waifu": "items_catch_your_waifu",
-    "catch your waifu bot": "items_catch_your_waifu",
-    "waifu grabber": "items_waifu_grabber",
-    "waifu grabber bot": "items_waifu_grabber",
-    "ᴡᴀɪғᴜ ɢʀᴀʙʙᴇʀ": "items_waifu_grabber",
-    "ᴡᴀɪғᴜ ɢʀᴀʙʙᴇʀ ʙᴏᴛ": "items_waifu_grabber",
     "roronoa zoro": "items_roronoa_zoro",
     "roronoa zoro bot": "items_roronoa_zoro",
     "picker bot": "items_character_picker",
@@ -153,6 +169,9 @@ TITLE_SOURCE_COLLECTION = {
     "senpai catcher": "items_senpai_catcher",
     "senpai catcher bot": "items_senpai_catcher",
     "senpaicatcher": "items_senpai_catcher",
+    "senpaicatcher db": "items_senpai_catcher",
+    "senpaicatcher database": "items_senpai_catcher",
+    "senpaibase": "items_senpai_catcher",
 }
 
 TITLE_OUTPUT_COMMAND = {
@@ -170,16 +189,17 @@ TITLE_OUTPUT_COMMAND = {
     "senpai catcher": "/pick",
     "senpai catcher bot": "/pick",
     "senpaicatcher": "/pick",
+    "senpaicatcher db": "/pick",
+    "senpaibase": "/pick",
 }
 
 
 def _clean_title(s: str | None) -> str:
     if not s:
         return ""
-    s = s.lower().strip()
-    s = s.replace("_", " ")
+    s = _norm_text(s).lower().strip().replace("_", " ")
     s = s.replace("「", " ").replace("」", " ")
-    s = re.sub(r"[^0-9a-zA-Z\u1000-\u109f\u1d00-\u1d7f\u1d80-\u1dbf\u0250-\u02af\u0370-\u03ff\s]+", " ", s)
+    s = re.sub(r"[^0-9a-z\u1000-\u109f\s]+", " ", s)
     s = re.sub(r"\s+", " ", s)
     return s.strip()
 
@@ -191,7 +211,7 @@ def _title_to_collection(title: str | None) -> str | None:
     if t in TITLE_SOURCE_COLLECTION:
         return TITLE_SOURCE_COLLECTION[t]
     for key, col in TITLE_SOURCE_COLLECTION.items():
-        if key in t:
+        if key in t or t in key:
             return col
     return None
 
@@ -203,21 +223,32 @@ def _title_to_output_command(title: str | None) -> str | None:
     if t in TITLE_OUTPUT_COMMAND:
         return TITLE_OUTPUT_COMMAND[t]
     for key, cmd in TITLE_OUTPUT_COMMAND.items():
-        if key in t:
+        if key in t or t in key:
             return cmd
     return None
+
+
+def _message_text(message: Message) -> str:
+    parts = [
+        getattr(message, "caption", None),
+        getattr(message, "text", None),
+        getattr(message, "html_text", None),
+        getattr(message, "md_text", None),
+    ]
+    return "\n".join(_norm_text(p) for p in parts if isinstance(p, str) and p.strip())
 
 
 def command_from_text(text: str | None) -> str | None:
     if not text:
         return None
-    t = text.strip()
+    t = _norm_text(text).strip()
     first = t.split(maxsplit=1)[0].lower() if t else ""
+    first = first.split("@", 1)[0]
     if first in COMMAND_TO_COLLECTIONS or first in COMMAND_TO_COLLECTION:
         return first
     m = USING_RE.search(t) or CMD_RE.search(t)
     if m:
-        cmd = m.group(m.lastindex or 1).lower()
+        cmd = m.group(m.lastindex or 1).lower().split("@", 1)[0]
         if cmd in COMMAND_TO_COLLECTIONS or cmd in COMMAND_TO_COLLECTION:
             return cmd
     return None
@@ -226,7 +257,7 @@ def command_from_text(text: str | None) -> str | None:
 def collections_from_command(cmd: str | None) -> list[str]:
     if not cmd:
         return []
-    cmd = cmd.lower()
+    cmd = cmd.lower().split("@", 1)[0]
     if cmd in COMMAND_TO_COLLECTIONS:
         return list(COMMAND_TO_COLLECTIONS[cmd])
     col = COMMAND_TO_COLLECTION.get(cmd)
@@ -239,33 +270,50 @@ def collection_from_command(cmd: str | None) -> str | None:
 
 
 def _normalize_username(username: str | None) -> str | None:
-    if not username:
-        return None
-    return "@" + str(username).lower().lstrip("@")
+    username = (username or "").strip().lower().lstrip("@")
+    return f"@{username}" if username else None
+
+
+def _source_origin_chat(message: Message):
+    origin = getattr(message, "forward_origin", None)
+    if origin:
+        chat = getattr(origin, "chat", None) or getattr(origin, "sender_chat", None)
+        if chat:
+            return chat
+    legacy = getattr(message, "forward_from_chat", None)
+    if legacy:
+        return legacy
+    sender_chat = getattr(message, "sender_chat", None)
+    if sender_chat:
+        return sender_chat
+    return None
+
+
+def source_chat_id(message: Message) -> int | None:
+    chat = _source_origin_chat(message)
+    if chat and getattr(chat, "id", None) is not None:
+        try:
+            return int(chat.id)
+        except Exception:
+            pass
+    return None
 
 
 def source_username(message: Message) -> str | None:
+    chat = _source_origin_chat(message)
+    if chat and getattr(chat, "username", None):
+        return _normalize_username(chat.username)
+
     origin = getattr(message, "forward_origin", None)
-
-    chat = getattr(origin, "chat", None) if origin else None
-    username = getattr(chat, "username", None) if chat else None
-    if username:
-        return _normalize_username(username)
-
     sender_user = getattr(origin, "sender_user", None) if origin else None
-    username = getattr(sender_user, "username", None) if sender_user else None
-    if username:
-        return _normalize_username(username)
+    if sender_user and getattr(sender_user, "username", None):
+        return _normalize_username(sender_user.username)
 
-    if message.via_bot and message.via_bot.username:
+    if getattr(message, "via_bot", None) and message.via_bot.username:
         return _normalize_username(message.via_bot.username)
 
     if message.from_user and message.from_user.is_bot and message.from_user.username:
         return _normalize_username(message.from_user.username)
-
-    fchat = getattr(message, "forward_from_chat", None)
-    if fchat and getattr(fchat, "username", None):
-        return _normalize_username(fchat.username)
 
     fuser = getattr(message, "forward_from", None)
     if fuser and getattr(fuser, "username", None):
@@ -275,46 +323,35 @@ def source_username(message: Message) -> str | None:
 
 
 def source_title(message: Message) -> str | None:
+    chat = _source_origin_chat(message)
+    if chat and getattr(chat, "title", None):
+        return str(chat.title)
+
     origin = getattr(message, "forward_origin", None)
-
-    chat = getattr(origin, "chat", None) if origin else None
-    title = getattr(chat, "title", None) if chat else None
-    if title:
-        return title
-
     sender_user = getattr(origin, "sender_user", None) if origin else None
     if sender_user:
-        full_name = getattr(sender_user, "full_name", None)
+        full_name = getattr(sender_user, "full_name", None) or " ".join(
+            x for x in [getattr(sender_user, "first_name", None), getattr(sender_user, "last_name", None)] if x
+        )
         if full_name:
             return full_name
-        first_name = getattr(sender_user, "first_name", None)
-        if first_name:
-            return first_name
 
     hidden_name = getattr(origin, "sender_user_name", None) if origin else None
     if hidden_name:
-        return hidden_name
-
-    fchat = getattr(message, "forward_from_chat", None)
-    if fchat and getattr(fchat, "title", None):
-        return fchat.title
+        return str(hidden_name)
 
     fuser = getattr(message, "forward_from", None)
     if fuser:
-        full_name = getattr(fuser, "full_name", None)
+        full_name = getattr(fuser, "full_name", None) or getattr(fuser, "first_name", None)
         if full_name:
-            return full_name
-        first_name = getattr(fuser, "first_name", None)
-        if first_name:
-            return first_name
-
+            return str(full_name)
     return None
 
 
 def _custom_source_command(message: Message) -> str | None:
     uname = source_username(message)
     title = source_title(message) or ""
-    text = f"{title}\n{message.caption or message.text or ''}".lower()
+    text = f"{title}\n{_message_text(message)}".lower()
 
     if uname and uname in settings.forward_source_commands:
         return settings.forward_source_commands[uname]
@@ -325,7 +362,7 @@ def _custom_source_command(message: Message) -> str | None:
             continue
         if "|" in key_l:
             parts = [p.strip() for p in key_l.split("|") if p.strip()]
-            if all(p in text for p in parts):
+            if parts and all(p in text for p in parts):
                 return cmd
         elif key_l and key_l in text:
             return cmd
@@ -333,10 +370,18 @@ def _custom_source_command(message: Message) -> str | None:
 
 
 def resolve_source_collection(message: Message) -> str | None:
-    """Resolve collection only from forward/direct source, not caption command."""
+    """Resolve collection from source only: bot username, channel username, title, or chat id.
+
+    This intentionally does not use the caption command. If this returns None,
+    resolve_lookup_scope() will then use the command inside the forwarded caption/text.
+    """
     username = source_username(message)
     if username and username in BOT_SOURCE_COLLECTION:
         return BOT_SOURCE_COLLECTION[username]
+
+    chat_id = source_chat_id(message)
+    if chat_id is not None and int(chat_id) in BOT_SOURCE_CHAT_ID:
+        return BOT_SOURCE_CHAT_ID[int(chat_id)]
 
     title_col = _title_to_collection(source_title(message))
     if title_col:
@@ -353,17 +398,14 @@ def resolve_source_collection(message: Message) -> str | None:
 def resolve_lookup_scope(message: Message) -> LookupScope:
     """Resolve the narrowest safe lookup scope.
 
-    Priority:
-    1) Forward/direct/via-bot source collection if known.
-    2) Caption/text command collection(s) if command is present.
-    3) None means search all collections in LOOKUP_COLLECTION_ORDER.
-
-    The strict flags are carried in the scope so lookup_service can decide
-    whether to fallback to all collections after a scoped miss.
+    Owner requested auto lookup logic:
+    - First check bot/channel name + username.
+    - If not found, read command in forwarded caption/text and search only that command's collection(s).
     """
     source_col = resolve_source_collection(message)
-    cmd = command_from_text(message.caption or message.text or "")
+    cmd = command_from_text(_message_text(message))
     cmd_cols = collections_from_command(cmd)
+    label = source_username(message) or source_title(message)
 
     if source_col:
         return LookupScope(
@@ -373,6 +415,7 @@ def resolve_lookup_scope(message: Message) -> LookupScope:
             source_collection=source_col,
             strict=settings.strict_forward_source_lookup,
             confident=True,
+            source_label=label,
         )
 
     if cmd_cols:
@@ -383,25 +426,17 @@ def resolve_lookup_scope(message: Message) -> LookupScope:
             source_collection=None,
             strict=settings.strict_command_lookup,
             confident=True,
+            source_label=label,
         )
 
-    return LookupScope(
-        collections=None,
-        mode="all",
-        command=cmd,
-        source_collection=None,
-        strict=False,
-        confident=False,
-    )
+    return LookupScope(collections=None, mode="all", command=cmd, strict=False, confident=False, source_label=label)
 
 
 def resolve_lookup_collections(message: Message) -> list[str] | None:
-    """Backward-compatible wrapper used by older code."""
     return resolve_lookup_scope(message).collections
 
 
 def resolve_collection(message: Message) -> str | None:
-    """Backward-compatible single collection resolver."""
     cols = resolve_lookup_collections(message)
     if cols and len(cols) == 1:
         return cols[0]
@@ -423,7 +458,7 @@ def output_command_from_message(message: Message, collection: str | None = None)
         if not collection or collection in cols:
             return custom_cmd
 
-    cmd = command_from_text(message.caption or message.text or "")
+    cmd = command_from_text(_message_text(message))
     if cmd:
         cols = collections_from_command(cmd)
         if not collection or collection in cols:
