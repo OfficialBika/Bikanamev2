@@ -10,6 +10,7 @@ from locales import en, my
 from services.force_join import require_join
 from services.lookup_service import lookup_service
 from services.result_formatter import format_result, result_buttons
+from services.source_blocker import blocked_source_text, is_blocked_source
 from utils.telegram_safe import safe_reply
 
 router = Router(name="manual_lookup")
@@ -110,6 +111,12 @@ async def manual_lookup(message: Message) -> None:
 
     # Router duplicate include / same update duplicate delivery ဖြစ်ရင် reply နှစ်ခါမထွက်အောင် ကာမယ်။
     if _already_processed(message):
+        return
+
+    target = message.reply_to_message or message
+    # Blocked source bots/channels must never be looked up in manual lookup too.
+    if is_blocked_source(target):
+        await safe_reply(message, blocked_source_text())
         return
 
     if not await require_join(message):

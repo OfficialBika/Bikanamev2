@@ -12,6 +12,7 @@ from services.force_join import require_join
 from services.group_access import can_auto_lookup, remember_user
 from services.lookup_service import lookup_service
 from services.result_formatter import format_result, result_buttons
+from services.source_blocker import blocked_source_text, is_blocked_source
 from utils.telegram_safe import safe_reply
 
 router = Router(name="auto_lookup")
@@ -141,6 +142,13 @@ async def auto_lookup(message: Message) -> None:
             _chat_id(message),
             getattr(message, "message_id", None),
         )
+        return
+
+    # Blocked source bots/channels must never be looked up.
+    # This is checked before force-join so the user sees the block reason directly.
+    if is_blocked_source(message):
+        if not _already_processed(message):
+            await safe_reply(message, blocked_source_text())
         return
 
     if not await require_join(message):
