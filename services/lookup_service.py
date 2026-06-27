@@ -15,6 +15,14 @@ from config import settings
 from services.hash_service import MediaHash, hamming_hex, hash_photo, hash_video
 from services.snapshot_cache import ItemSnapshot, snapshot
 from services.source_resolver import output_command_from_message, resolve_lookup_scope, all_lookup_collections
+
+# Optional hard block guard. If a blocked source reaches lookup_service,
+# return blocked_source before any DB/cache/hash lookup.
+try:
+    from services.source_blocker import is_blocked_source  # type: ignore
+except Exception:  # pragma: no cover
+    def is_blocked_source(message: Message | None) -> bool:  # type: ignore
+        return False
 from utils.media import extract_media
 from utils.perf import perf
 from utils.ttl_cache import TTLCache
@@ -67,7 +75,19 @@ class LookupService:
                     return self._done(None, "no_media", t0)
 
                 source_message = media.source_message
+
+                # Safety layer for blocked source bots/channels.
+                # Auto/manual handlers should catch this before lookup, but keep this here
+                # so direct service calls can never search a blocked source.
+                if is_blocked_source(source_message):
+                    return self._done(None, "blocked_source", t0)
+
                 scope = resolve_lookup_scope(source_message)
+                if getattr(scope, "mode", "") == "blocked":
+                    return self._done(None, "blocked_source", t0)
+
+                if manual and is_blocked_source(message):
+                    return self._done(None, "blocked_source", t0)
 
                 # Manual command is often a reply to media. Prefer the media/forward source.
                 # If the media has no source/cmd, use the command message itself (/bika, /pick, /loot).

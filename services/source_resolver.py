@@ -18,6 +18,14 @@ try:
 except Exception:  # pragma: no cover
     BOT_SOURCE_CHAT_ID = {}
 
+# Optional blocked-source guard. Keep this lazy/backward compatible so this file
+# still works before services/source_blocker.py is copied into the repo.
+try:
+    from services.source_blocker import is_blocked_source  # type: ignore
+except Exception:  # pragma: no cover
+    def is_blocked_source(message: Message | None) -> bool:  # type: ignore
+        return False
+
 # Manual lookup commands. /loop is intentionally NOT included.
 MANUAL_COMMANDS = {"/waifu", "/w", ".wa", ".w", "/name", ".name", "/bika", "/loot", "/pick"}
 
@@ -375,6 +383,9 @@ def resolve_source_collection(message: Message) -> str | None:
     This intentionally does not use the caption command. If this returns None,
     resolve_lookup_scope() will then use the command inside the forwarded caption/text.
     """
+    if is_blocked_source(message):
+        return None
+
     username = source_username(message)
     if username and username in BOT_SOURCE_COLLECTION:
         return BOT_SOURCE_COLLECTION[username]
@@ -399,9 +410,21 @@ def resolve_lookup_scope(message: Message) -> LookupScope:
     """Resolve the narrowest safe lookup scope.
 
     Owner requested auto lookup logic:
+    - Blocked source bots/channels return mode="blocked" and must not be searched.
     - First check bot/channel name + username.
     - If not found, read command in forwarded caption/text and search only that command's collection(s).
     """
+    if is_blocked_source(message):
+        return LookupScope(
+            collections=[],
+            mode="blocked",
+            command=None,
+            source_collection=None,
+            strict=True,
+            confident=True,
+            source_label=source_username(message) or source_title(message),
+        )
+
     source_col = resolve_source_collection(message)
     cmd = command_from_text(_message_text(message))
     cmd_cols = collections_from_command(cmd)
