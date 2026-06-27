@@ -36,6 +36,23 @@ def _ids(name: str) -> Set[int]:
     return out
 
 
+def _normalized_usernames(name: str, defaults: List[str] | None = None) -> Set[str]:
+    raw = _csv(name)
+    if not raw and defaults:
+        raw = defaults
+    out: Set[str] = set()
+    for x in raw:
+        x = x.strip().lower().lstrip("@")
+        if x:
+            out.add("@" + x)
+    return out
+
+
+def _csv_default(name: str, defaults: List[str]) -> List[str]:
+    values = _csv(name)
+    return values if values else list(defaults)
+
+
 def _sample_points() -> Tuple[float, ...]:
     raw = _csv("VIDEO_SAMPLE_POINTS") or ["20", "50", "80"]
     pts: List[float] = []
@@ -219,6 +236,22 @@ class Settings:
 
     force_join_positive_cache_seconds: int = _int("FORCE_JOIN_POSITIVE_CACHE_SECONDS", 86400)
     force_join_prompt_throttle_seconds: int = _int("FORCE_JOIN_PROMPT_THROTTLE_SECONDS", 60)
+
+    # Blocked source bots/channels: media from these sources must never be looked up.
+    # Defaults requested by owner: @CharactersCatcher_Bot / id 8303168571.
+    blocked_source_user_ids: Set[int] = field(default_factory=lambda: _ids("BLOCKED_SOURCE_USER_IDS") or {8303168571})
+    blocked_source_usernames: Set[str] = field(
+        default_factory=lambda: _normalized_usernames(
+            "BLOCKED_SOURCE_USERNAMES",
+            ["@CharactersCatcher_Bot"],
+        )
+    )
+    blocked_source_titles: List[str] = field(
+        default_factory=lambda: _csv_default(
+            "BLOCKED_SOURCE_TITLES",
+            ["Character Catcher Bot [Beta]"],
+        )
+    )
 
     forward_source_commands: Dict[str, str] = field(default_factory=_custom_forward_source_commands)
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
