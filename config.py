@@ -84,6 +84,7 @@ COLLECTION_TO_OUTPUT_COMMAND: Dict[str, str] = {
     "items_character_picker": "/pick",
     "items_bika_character": "/bika",
     "items_senpai_catcher": "/pick",
+    "items_super_zeko": "/ziceko",
     "items_unknown": "/name",
 }
 
@@ -98,6 +99,7 @@ COMMAND_TO_COLLECTION: Dict[str, str] = {
     "/smash": "items_smash_character",
     "/challenge": "items_roronoa_zoro",
     "/pick": "items_character_picker",
+    "/ziceko": "items_super_zeko",
     "/bika": "items_bika_character",
 }
 
@@ -119,6 +121,8 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@waifuxgrabbot": "items_waifux_grab",
     "@waifuxgrab_database": "items_waifux_grab",
     "@waifuxgrabdb": "items_waifux_grab",
+    "@super_zeko_bot": "items_super_zeko",
+    "@zicekodata_1": "items_super_zeko",
     "@catch_your_waifu_bot": "items_catch_your_waifu",
     "@waifu_grabber_bot": "items_waifu_grabber",
     "@roronoa_zoro_robot": "items_roronoa_zoro",
@@ -130,6 +134,8 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
 
 # Strong source channel IDs. Add more IDs here if Telegram hides username/title.
 BOT_SOURCE_CHAT_ID: Dict[int, str] = {
+    # Myanmar Character / Logs
+    -1003860021274: "items_super_zeko",
     # SenpaiCatcher / DB
     -1003218799804: "items_senpai_catcher",
     # Bika Waifu Database
@@ -139,6 +145,8 @@ BOT_SOURCE_CHAT_ID: Dict[int, str] = {
 # Some bots share a database collection but need a different command in the result.
 # @CharacterLootBot uses the Seizer database collection, but users should copy /loot.
 BOT_SOURCE_OUTPUT_COMMAND: Dict[str, str] = {
+    "@super_zeko_bot": "/ziceko",
+    "@zicekodata_1": "/ziceko",
     "@characterlootbot": "/loot",
 }
 
