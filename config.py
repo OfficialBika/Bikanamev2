@@ -146,6 +146,52 @@ BOT_SOURCE_CHAT_ID: Dict[int, str] = {
     -1003598338404: "items_orinx_waifu",
 }
 
+# Strong source bot/user IDs. Telegram forwards from bots may expose sender_user.id
+# even when the username is hidden by the client. This is especially important
+# for Mini App bots such as Grab Garden / @WaifuxGrabBot.
+BOT_SOURCE_USER_ID: Dict[int, str] = {
+    # Character Catcher Bot / @Character_Catcher_Bot
+    6157455819: "items_character_catcher",
+    # Character Hallow Bot / @Characters_Hallow_bot
+    8688011915: "items_characters_hallow",
+    # CHARACTER CAPTURE Bot / @CaptureCharacterBot
+    7686672468: "items_capture_character",
+    # Character Seize Bot / @Character_Seizer_Bot
+    7595626187: "items_character_seizer",
+    # HUSBANDO GRABBER BOT / @Husbando_Grabber_Bot
+    6546492683: "items_husbando_grabber",
+    # Grab Your Waifu / @Grab_Your_Waifu_Bot
+    5934263177: "items_grab_your_waifu",
+    # Grab Your Husbando / @Grab_Your_Husbando_Bot
+    6212414747: "items_grab_your_husbando",
+    # Takers Bot / @Takers_character_bot
+    7691496587: "items_takers_character",
+    # Catch Your Husbando / @Catch_Your_Husbando_Bot
+    6763528462: "items_catch_your_husbando",
+    # Smash Your Character Bot / @Smash_Character_Bot
+    8336201607: "items_smash_character",
+    # Grab Garden / @WaifuxGrabBot
+    8649913814: "items_waifux_grab",
+    # Catch Your Waifu / @Catch_Your_Waifu_Bot
+    6883098627: "items_catch_your_waifu",
+    # WAIFU GRABBER BOT / @Waifu_Grabber_Bot
+    6195436879: "items_waifu_grabber",
+    # Character Looter Bot / @CharacterLootBot
+    8359842815: "items_capture_character",
+    # Roronoa Zoro / @roronoa_zoro_robot
+    5284997893: "items_roronoa_zoro",
+    # Character Picker Bot / @character_picker_bot
+    8307651649: "items_character_picker",
+    # Bika Character Bot / @BikaCharacterBot
+    8768750156: "items_bika_character",
+    # SenpaiCatcher / @SenpaiCatcherBot
+    8532697507: "items_senpai_catcher",
+    # Myanmar Character / @Super_zeko_bot
+    8534437620: "items_super_zeko",
+    # OrinX Waifu Bot / @orinx_catcher_waifu_bot
+    8685992652: "items_orinx_waifu",
+}
+
 # Username/title-specific output command overrides.
 BOT_SOURCE_OUTPUT_COMMAND: Dict[str, str] = {
     "@characterlootbot": "/loot",
@@ -153,6 +199,13 @@ BOT_SOURCE_OUTPUT_COMMAND: Dict[str, str] = {
     "@zicekodata_1": "/ziceko",
     "@orinx_catcher_waifu_bot": "/orin",
     "@timunagalaya": "/orin",
+}
+
+# Strong source bot/user IDs that need command override.
+BOT_SOURCE_OUTPUT_USER_ID: Dict[int, str] = {
+    8359842815: "/loot",   # Character Looter Bot uses capture collection, output /loot
+    8534437620: "/ziceko", # Myanmar Character
+    8685992652: "/orin",   # OrinX Waifu Bot
 }
 
 # These commands should return only name/hint/full; ID and rarity are intentionally hidden.
@@ -221,8 +274,13 @@ class Settings:
     miss_cache_ttl_seconds: int = _int("MISS_CACHE_TTL_SECONDS", 300)
 
     photo_phash_threshold: int = _int("PHOTO_PHASH_THRESHOLD", 8)
+    # Waifux/Grab Garden often reuses the same visual media with different Telegram file IDs
+    # and slightly different compression. Keep this wider threshold scoped to items_waifux_grab only.
+    waifux_photo_phash_threshold: int = _int("WAIFUX_PHASH_THRESHOLD", 16)
     video_frame_threshold: int = _int("VIDEO_FRAME_THRESHOLD", 10)
     video_avg_threshold: int = _int("VIDEO_AVG_THRESHOLD", 12)
+    waifux_video_frame_threshold: int = _int("WAIFUX_VIDEO_FRAME_THRESHOLD", 14)
+    waifux_video_avg_threshold: int = _int("WAIFUX_VIDEO_AVG_THRESHOLD", 16)
     video_sample_points: Tuple[float, ...] = field(default_factory=_sample_points)
 
     max_concurrent_downloads: int = _int("MAX_CONCURRENT_DOWNLOADS", 10)
