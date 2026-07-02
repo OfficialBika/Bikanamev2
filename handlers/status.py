@@ -37,8 +37,9 @@ SUPPORTED_BOTS = [
     ("@roronoa_zoro_robot", "/challenge"),
     ("@character_picker_bot", "/pick"),
     ("@BikaCharacterBot", "/bika"),
-    ("@Super_zeko_bot", "/ziceko"),
     ("@SenpaiCatcherBot", "/pick"),
+    ("@Super_zeko_bot", "/ziceko"),
+    ("@orinx_catcher_waifu_bot", "/orin"),
 ]
 
 
@@ -126,15 +127,9 @@ async def _count_gapproved() -> int:
 
 
 async def _count_known_groups_robust() -> int:
-    """Count known groups plus existing gapproved group keys.
-
-    This fixes Total Groups=0 on old DBs where groups were approved in settings
-    but never inserted into known_groups.
-    """
     try:
         db = get_db()
         group_ids: set[int] = set()
-
         async for doc in db["known_groups"].find({}, {"chat_id": 1, "group_id": 1}):
             raw_id = doc.get("chat_id") or doc.get("group_id")
             try:
@@ -142,13 +137,11 @@ async def _count_known_groups_robust() -> int:
                     group_ids.add(int(raw_id))
             except Exception:
                 pass
-
         async for doc in db["settings"].find({"key": {"$regex": r"^gapprove:"}, "enabled": True}, {"key": 1}):
             key = str(doc.get("key") or "")
             match = re.match(r"^gapprove:(-?\d+)$", key)
             if match:
                 group_ids.add(int(match.group(1)))
-
         return len(group_ids)
     except Exception:
         return 0
@@ -184,10 +177,8 @@ def _ram_info() -> tuple[str, str, str]:
         total = data.get("MemTotal", 0)
         available = data.get("MemAvailable", 0)
         used = max(total - available, 0)
-
         def gb(x: int) -> str:
             return f"{x / (1024 ** 3):.2f} GB"
-
         return gb(used), gb(available), gb(total)
     except Exception:
         return "N/A", "N/A", "N/A"
@@ -199,12 +190,7 @@ async def build_status_text(message: Message) -> str:
     gapproved = await _count_gapproved()
     blacklisted = await _count_collection("blacklisted_users")
     bot_ping = await _bot_ping_ms(message)
-
-    supported_lines = [
-        f"{i}. {username} : {cmd}"
-        for i, (username, cmd) in enumerate(SUPPORTED_BOTS, start=1)
-    ]
-
+    supported_lines = [f"{i}. {username} : {cmd}" for i, (username, cmd) in enumerate(SUPPORTED_BOTS, start=1)]
     return (
         "♻ BOT DATABASE STATUS\n"
         f"‣ Total Media : {_fmt_int(_snapshot_total())}\n"
@@ -216,8 +202,7 @@ async def build_status_text(message: Message) -> str:
         f"‣ Snapshot Age : {_snapshot_age()}\n"
         f"‣ Result Cache : {_cache_status()}\n"
         f"‣ Bot Latency : {_fmt_ms(bot_ping)}\n\n"
-        "🤖 Supported Bot List\n"
-        + "\n".join(supported_lines)
+        "🤖 Supported Bot List\n" + "\n".join(supported_lines)
     )
 
 
@@ -225,7 +210,6 @@ async def build_stats_text(message: Message) -> str:
     db_ping = await _db_ping_ms()
     bot_ping = await _bot_ping_ms(message)
     ram_used, ram_left, ram_total = _ram_info()
-
     return (
         "📊 OWNER BOT STATS\n\n"
         f"‣ Uptime : {_uptime()}\n"
