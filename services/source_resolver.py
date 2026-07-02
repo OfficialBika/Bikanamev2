@@ -8,7 +8,9 @@ from aiogram.types import Message
 from config import (
     BOT_SOURCE_CHAT_ID,
     BOT_SOURCE_COLLECTION,
+    BOT_SOURCE_USER_ID,
     BOT_SOURCE_OUTPUT_COMMAND,
+    BOT_SOURCE_OUTPUT_USER_ID,
     COLLECTION_TO_OUTPUT_COMMAND,
     COMMAND_TO_COLLECTION,
     settings,
@@ -307,6 +309,30 @@ def source_chat_id(message: Message) -> int | None:
     return None
 
 
+def source_user_id(message: Message) -> int | None:
+    """Return forwarded/via/sender bot user id when Telegram exposes it.
+
+    Forwarded bot media can show only the display name in the client (for example
+    "Grab Garden") while the Bot API still exposes forward_origin.sender_user.id.
+    User-id mapping is the strongest way to route those messages to the exact
+    source collection.
+    """
+    origin = getattr(message, "forward_origin", None)
+    sender_user = getattr(origin, "sender_user", None) if origin else None
+    for user in (
+        sender_user,
+        getattr(message, "via_bot", None),
+        getattr(message, "forward_from", None),
+        getattr(message, "from_user", None) if getattr(getattr(message, "from_user", None), "is_bot", False) else None,
+    ):
+        if user and getattr(user, "id", None) is not None:
+            try:
+                return int(user.id)
+            except Exception:
+                pass
+    return None
+
+
 def source_username(message: Message) -> str | None:
     chat = _source_origin_chat(message)
     if chat and getattr(chat, "username", None):
@@ -394,6 +420,10 @@ def resolve_source_collection(message: Message) -> str | None:
     if username and username in BOT_SOURCE_COLLECTION:
         return BOT_SOURCE_COLLECTION[username]
 
+    user_id = source_user_id(message)
+    if user_id is not None and int(user_id) in BOT_SOURCE_USER_ID:
+        return BOT_SOURCE_USER_ID[int(user_id)]
+
     chat_id = source_chat_id(message)
     if chat_id is not None and int(chat_id) in BOT_SOURCE_CHAT_ID:
         return BOT_SOURCE_CHAT_ID[int(chat_id)]
@@ -464,6 +494,10 @@ def output_command_from_message(message: Message, collection: str | None = None)
     username = source_username(message)
     if username and username in BOT_SOURCE_OUTPUT_COMMAND:
         return BOT_SOURCE_OUTPUT_COMMAND[username]
+
+    user_id = source_user_id(message)
+    if user_id is not None and int(user_id) in BOT_SOURCE_OUTPUT_USER_ID:
+        return BOT_SOURCE_OUTPUT_USER_ID[int(user_id)]
 
     title_cmd = _title_to_output_command(source_title(message))
     if title_cmd:

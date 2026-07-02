@@ -315,9 +315,14 @@ class LookupService:
 
         best: tuple[float, ItemSnapshot] | None = None
         for item in self._candidates(collection_filter, media_type):
+            is_waifux = item.collection == "items_waifux_grab"
             if media_type == "photo" and mh.phash and item.phash:
                 d = hamming_hex(mh.phash, item.phash)
-                if d is not None and d <= settings.photo_phash_threshold and (best is None or d < best[0]):
+                threshold = (
+                    getattr(settings, "waifux_photo_phash_threshold", settings.photo_phash_threshold)
+                    if is_waifux else settings.photo_phash_threshold
+                )
+                if d is not None and d <= threshold and (best is None or d < best[0]):
                     best = (float(d), item)
             elif media_type == "video" and mh.frame_hashes and item.frame_hashes:
                 ds: list[int] = []
@@ -328,7 +333,15 @@ class LookupService:
                 if not ds:
                     continue
                 avg = sum(ds) / len(ds)
-                if min(ds) <= settings.video_frame_threshold and avg <= settings.video_avg_threshold:
+                frame_threshold = (
+                    getattr(settings, "waifux_video_frame_threshold", settings.video_frame_threshold)
+                    if is_waifux else settings.video_frame_threshold
+                )
+                avg_threshold = (
+                    getattr(settings, "waifux_video_avg_threshold", settings.video_avg_threshold)
+                    if is_waifux else settings.video_avg_threshold
+                )
+                if min(ds) <= frame_threshold and avg <= avg_threshold:
                     if best is None or avg < best[0]:
                         best = (avg, item)
         return best[1] if best else None
