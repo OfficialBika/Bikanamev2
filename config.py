@@ -65,7 +65,7 @@ def _sample_points() -> Tuple[float, ...]:
     return tuple(pts or [0.2, 0.5, 0.8])
 
 
-# Waifu Database V2 source collections.
+# Waifu Database V2 source collections. Adding Bot and Lookup Bot must match this map.
 COLLECTION_TO_OUTPUT_COMMAND: Dict[str, str] = {
     "items_character_catcher": "/catch",
     "items_characters_hallow": "/hallow",
@@ -85,10 +85,12 @@ COLLECTION_TO_OUTPUT_COMMAND: Dict[str, str] = {
     "items_bika_character": "/bika",
     "items_senpai_catcher": "/pick",
     "items_super_zeko": "/ziceko",
+    "items_orinx_waifu": "/orin",
     "items_unknown": "/name",
 }
 
-# Best-effort direct command to collection. Shared commands like /grab and /guess are resolved by source first.
+# Direct command to collection for commands that are unique. Shared commands (/grab, /guess, /pick)
+# are handled as command groups by services/source_resolver.py.
 COMMAND_TO_COLLECTION: Dict[str, str] = {
     "/catch": "items_character_catcher",
     "/hallow": "items_characters_hallow",
@@ -98,17 +100,19 @@ COMMAND_TO_COLLECTION: Dict[str, str] = {
     "/take": "items_takers_character",
     "/smash": "items_smash_character",
     "/challenge": "items_roronoa_zoro",
-    "/pick": "items_character_picker",
-    "/ziceko": "items_super_zeko",
     "/bika": "items_bika_character",
+    "/ziceko": "items_super_zeko",
+    "/orin": "items_orinx_waifu",
 }
 
+# Username/channel username -> exact source collection.
 BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@character_catcher_bot": "items_character_catcher",
     "@characters_hallow_bot": "items_characters_hallow",
     "@hallowuploads": "items_characters_hallow",
     "@capturecharacterbot": "items_capture_character",
     "@capturedatabase": "items_capture_character",
+    "@character_seizer_bot": "items_character_seizer",
     "@character_seizer_bot": "items_character_seizer",
     "@seizer_database": "items_character_seizer",
     "@characterlootbot": "items_capture_character",
@@ -121,8 +125,6 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@waifuxgrabbot": "items_waifux_grab",
     "@waifuxgrab_database": "items_waifux_grab",
     "@waifuxgrabdb": "items_waifux_grab",
-    "@super_zeko_bot": "items_super_zeko",
-    "@zicekodata_1": "items_super_zeko",
     "@catch_your_waifu_bot": "items_catch_your_waifu",
     "@waifu_grabber_bot": "items_waifu_grabber",
     "@roronoa_zoro_robot": "items_roronoa_zoro",
@@ -130,28 +132,30 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@bikacharacterbot": "items_bika_character",
     "@senpaicatcherbot": "items_senpai_catcher",
     "@senpaibase": "items_senpai_catcher",
+    "@super_zeko_bot": "items_super_zeko",
+    "@zicekodata_1": "items_super_zeko",
+    "@orinx_catcher_waifu_bot": "items_orinx_waifu",
+    "@timunagalaya": "items_orinx_waifu",
 }
 
-# Strong source channel IDs. Add more IDs here if Telegram hides username/title.
+# Strong source channel IDs. This is the most reliable way when Telegram hides usernames/titles.
 BOT_SOURCE_CHAT_ID: Dict[int, str] = {
-    # Myanmar Character / Logs
-    -1003860021274: "items_super_zeko",
-    # SenpaiCatcher / DB
     -1003218799804: "items_senpai_catcher",
-    # Bika Waifu Database
     -1003923540741: "items_bika_character",
+    -1003860021274: "items_super_zeko",
+    -1003598338404: "items_orinx_waifu",
 }
 
-# Some bots share a database collection but need a different command in the result.
-# @CharacterLootBot uses the Seizer database collection, but users should copy /loot.
+# Username/title-specific output command overrides.
 BOT_SOURCE_OUTPUT_COMMAND: Dict[str, str] = {
+    "@characterlootbot": "/loot",
     "@super_zeko_bot": "/ziceko",
     "@zicekodata_1": "/ziceko",
-    "@characterlootbot": "/loot",
+    "@orinx_catcher_waifu_bot": "/orin",
+    "@timunagalaya": "/orin",
 }
 
-# These commands should return only the name/hint/full.
-# ID and rarity are intentionally hidden for Capture, Seizer and Loot results.
+# These commands should return only name/hint/full; ID and rarity are intentionally hidden.
 HIDE_ID_RARITY_COMMANDS: Set[str] = {"/capture", "/seize", "/loot", "/challenge"}
 
 SYSTEM_COLLECTIONS = {"sudo_users", "known_users", "known_groups", "user_modes", "settings", "items"}
@@ -209,32 +213,27 @@ class Settings:
     enable_copy_buttons: bool = _bool("ENABLE_COPY_BUTTONS", True)
     fast_reply_mode: bool = _bool("FAST_REPLY_MODE", False)
 
-    snapshot_refresh_seconds: int = _int("SNAPSHOT_REFRESH_SECONDS", 60)
+    snapshot_refresh_seconds: int = _int("SNAPSHOT_REFRESH_SECONDS", 300)
     snapshot_startup_load: bool = _bool("SNAPSHOT_STARTUP_LOAD", True)
     snapshot_background_refresh: bool = _bool("SNAPSHOT_BACKGROUND_REFRESH", True)
-    result_cache_max_items: int = _int("RESULT_CACHE_MAX_ITEMS", 5000)
-    result_cache_ttl_seconds: int = _int("RESULT_CACHE_TTL_SECONDS", 600)
-    miss_cache_ttl_seconds: int = _int("MISS_CACHE_TTL_SECONDS", 60)
+    result_cache_max_items: int = _int("RESULT_CACHE_MAX_ITEMS", 150000)
+    result_cache_ttl_seconds: int = _int("RESULT_CACHE_TTL_SECONDS", 7200)
+    miss_cache_ttl_seconds: int = _int("MISS_CACHE_TTL_SECONDS", 300)
 
     photo_phash_threshold: int = _int("PHOTO_PHASH_THRESHOLD", 8)
     video_frame_threshold: int = _int("VIDEO_FRAME_THRESHOLD", 10)
     video_avg_threshold: int = _int("VIDEO_AVG_THRESHOLD", 12)
     video_sample_points: Tuple[float, ...] = field(default_factory=_sample_points)
 
-    max_concurrent_downloads: int = _int("MAX_CONCURRENT_DOWNLOADS", 20)
+    max_concurrent_downloads: int = _int("MAX_CONCURRENT_DOWNLOADS", 10)
     max_concurrent_lookups: int = _int("MAX_CONCURRENT_LOOKUPS", 50)
     download_timeout_seconds: int = _int("DOWNLOAD_TIMEOUT_SECONDS", 8)
 
-    # Lookup speed optimization:
-    # - source/forward known => search only that source collection first
-    # - command known => search only the command's collection group first
-    # - optional fallback keeps old all-database search behavior if strict scope misses
+    # V3 source-scoped lookup settings.
     strict_forward_source_lookup: bool = _bool("STRICT_FORWARD_SOURCE_LOOKUP", True)
     strict_command_lookup: bool = _bool("STRICT_COMMAND_LOOKUP", True)
     fallback_all_on_strict_miss: bool = _bool("FALLBACK_ALL_ON_STRICT_MISS", False)
     require_lookup_scope: bool = _bool("REQUIRE_LOOKUP_SCOPE", True)
-    # False means UID miss can still try source-scoped sha256/phash fallback.
-    # This is slower than UID-only but fixes old DB/media where file_unique_id is missing or changed.
     strict_exact_lookup_only: bool = _bool("STRICT_EXACT_LOOKUP_ONLY", False)
     enable_hash_fallback: bool = _bool("ENABLE_HASH_FALLBACK", True)
 
@@ -245,21 +244,10 @@ class Settings:
     force_join_positive_cache_seconds: int = _int("FORCE_JOIN_POSITIVE_CACHE_SECONDS", 86400)
     force_join_prompt_throttle_seconds: int = _int("FORCE_JOIN_PROMPT_THROTTLE_SECONDS", 60)
 
-    # Blocked source bots/channels: media from these sources must never be looked up.
-    # Defaults requested by owner: @CharactersCatcher_Bot / id 8303168571.
+    # Blocked source bots/channels: requested @CharactersCatcher_Bot / ID 8303168571.
     blocked_source_user_ids: Set[int] = field(default_factory=lambda: _ids("BLOCKED_SOURCE_USER_IDS") or {8303168571})
-    blocked_source_usernames: Set[str] = field(
-        default_factory=lambda: _normalized_usernames(
-            "BLOCKED_SOURCE_USERNAMES",
-            ["@CharactersCatcher_Bot"],
-        )
-    )
-    blocked_source_titles: List[str] = field(
-        default_factory=lambda: _csv_default(
-            "BLOCKED_SOURCE_TITLES",
-            ["Character Catcher Bot [Beta]"],
-        )
-    )
+    blocked_source_usernames: Set[str] = field(default_factory=lambda: _normalized_usernames("BLOCKED_SOURCE_USERNAMES", ["@CharactersCatcher_Bot"]))
+    blocked_source_titles: List[str] = field(default_factory=lambda: _csv_default("BLOCKED_SOURCE_TITLES", ["Character Catcher Bot [Beta]"]))
 
     forward_source_commands: Dict[str, str] = field(default_factory=_custom_forward_source_commands)
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
