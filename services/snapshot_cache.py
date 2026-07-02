@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Dict, Iterable, List
+from typing import Any, Dict, Iterable, List
 
 from config import COLLECTION_TO_OUTPUT_COMMAND, settings
 from database.mongo import get_db
@@ -20,6 +20,7 @@ class ItemSnapshot:
     name: str
     card_id: str | int | None = None
     rarity: str | None = None
+    anime_name: str | None = None
     media_type: str | None = None
     file_unique_id: str | None = None
     sha256: str | None = None
@@ -31,18 +32,10 @@ class ItemSnapshot:
         return self.collection == "items_waifux_grab"
 
 
-def _get_nested(doc: dict, name: str):
-    """Return top-level or dotted-path values from Mongo docs.
-
-    Some adding-bot versions store metadata under nested media/photo/video
-    dicts or with alternate field names. Supporting both keeps old data visible
-    without changing DB schema.
-    """
-    if name in doc:
-        return doc.get(name)
-    cur = doc
-    for part in name.split("."):
-        if not isinstance(cur, dict) or part not in cur:
+def _nested(doc: dict, path: str):
+    cur: Any = doc
+    for part in path.split("."):
+        if not isinstance(cur, dict):
             return None
         cur = cur.get(part)
     return cur
@@ -50,10 +43,20 @@ def _get_nested(doc: dict, name: str):
 
 def _first_present(doc: dict, names: Iterable[str]):
     for name in names:
-        value = _get_nested(doc, name)
-        if value not in (None, ""):
+        value = _nested(doc, name) if "." in name else doc.get(name)
+        if value not in (None, "", [], {}):
             return value
     return None
+
+
+def _clean(value) -> str | None:
+    if value in (None, ""):
+        return None
+    try:
+        s = str(value).strip()
+    except Exception:
+        return None
+    return s or None
 
 
 def _parse_frame_hashes(value) -> tuple[str, ...]:
@@ -64,27 +67,43 @@ def _parse_frame_hashes(value) -> tuple[str, ...]:
     if isinstance(value, str):
         return tuple(x.strip() for x in value.split(",") if x.strip())
     if isinstance(value, (list, tuple)):
-        out = []
+        out: list[str] = []
         for x in value:
             if isinstance(x, dict):
-                x = x.get("hash") or x.get("phash")
+                x = x.get("hash") or x.get("phash") or x.get("value")
             if x:
-                out.append(str(x).strip())
-        return tuple(x for x in out if x)
+                s = str(x).strip()
+                if s:
+                    out.append(s)
+        return tuple(out)
     return ()
 
 
 def _guess_media_type(doc: dict, phash: str | None, frame_hashes: tuple[str, ...]) -> str | None:
-    media_type = str(_first_present(doc, ["media_type", "type", "media.type"]) or "").lower().strip()
-    if media_type in {"photo", "image"}:
+    raw = _first_present(doc, ["media_type", "type", "media.type", "file_type"])
+    media_type = str(raw or "").lower().strip()
+    if media_type in {"photo", "image", "pic", "picture"}:
         return "photo"
-    if media_type in {"video", "animation"}:
+    if media_type in {"video", "animation", "gif"}:
         return "video"
     if frame_hashes:
         return "video"
     if phash:
         return "photo"
     return media_type or None
+
+
+NAME_FIELDS = [
+    "name", "character_name", "char_name", "item_name", "card_name", "display_name", "title",
+    "media.name", "photo.name", "video.name", "character.name",
+]
+ANIME_FIELDS = ["anime_name", "anime", "series", "movie", "category", "media.series", "character.series"]
+ID_FIELDS = ["card_id", "id", "item_id", "char_id", "character_id", "media.id", "character.id"]
+RARITY_FIELDS = ["rarity", "rank", "tier", "class", "media.rarity", "character.rarity"]
+FILE_UID_FIELDS = ["file_unique_id", "photo_file_unique_id", "video_file_unique_id", "media.file_unique_id", "file.unique_id"]
+SHA_FIELDS = ["sha256", "media_sha256", "hash", "file_hash", "media.sha256", "file.sha256"]
+PHASH_FIELDS = ["phash", "photo_phash", "image_phash", "media.phash", "file.phash"]
+FRAME_HASH_FIELDS = ["frame_hashes", "video_frame_hashes", "frames", "media.frame_hashes", "file.frame_hashes"]
 
 
 class SnapshotCache:
@@ -110,78 +129,33 @@ class SnapshotCache:
         new_photos: Dict[str, List[ItemSnapshot]] = {}
         new_videos: Dict[str, List[ItemSnapshot]] = {}
 
-        projection = {
-            # Name aliases. Older/newer adding-bot versions may use different keys.
-            "name": 1,
-            "character_name": 1,
-            "char_name": 1,
-            "character": 1,
-            "item_name": 1,
-            "card_name": 1,
-            "display_name": 1,
-            "title": 1,
-            "media.name": 1,
-            "photo.name": 1,
-            "video.name": 1,
-
-            # ID / rarity aliases.
-            "card_id": 1,
-            "item_id": 1,
-            "character_id": 1,
-            "id": 1,
-            "rarity": 1,
-            "rank": 1,
-            "tier": 1,
-            "class": 1,
-            "category": 1,
-
-            # Media / hash aliases.
-            "media_type": 1,
-            "type": 1,
-            "media.type": 1,
-            "file_unique_id": 1,
-            "photo_file_unique_id": 1,
-            "video_file_unique_id": 1,
-            "media_file_unique_id": 1,
-            "media.file_unique_id": 1,
-            "photo.file_unique_id": 1,
-            "video.file_unique_id": 1,
-            "sha256": 1,
-            "media_sha256": 1,
-            "file_sha256": 1,
-            "hash": 1,
-            "media.hash": 1,
-            "phash": 1,
-            "photo_phash": 1,
-            "media_phash": 1,
-            "media.phash": 1,
-            "frame_hashes": 1,
-            "video_frame_hashes": 1,
-            "media.frame_hashes": 1,
-            "video.frame_hashes": 1,
-        }
+        projection = {field.split(".")[0]: 1 for field in set(NAME_FIELDS + ANIME_FIELDS + ID_FIELDS + RARITY_FIELDS + FILE_UID_FIELDS + SHA_FIELDS + PHASH_FIELDS + FRAME_HASH_FIELDS)}
+        projection.update({"command_name": 1, "source_key": 1, "source_collection": 1})
 
         total = 0
-        for collection, command in COLLECTION_TO_OUTPUT_COMMAND.items():
+        for collection, default_command in COLLECTION_TO_OUTPUT_COMMAND.items():
             docs: List[ItemSnapshot] = []
             try:
                 cursor = db[collection].find({}, projection=projection, no_cursor_timeout=False)
                 async for d in cursor:
-                    name = normalize_name(_first_present(d, ["name", "character_name", "char_name", "character", "item_name", "card_name", "display_name", "title", "media.name", "photo.name", "video.name"]))
+                    name_raw = _first_present(d, NAME_FIELDS)
+                    name = normalize_name(name_raw)
                     if not name:
                         continue
-                    phash = _first_present(d, ["phash", "photo_phash", "media_phash", "media.phash"])
-                    frame_hashes = _parse_frame_hashes(_first_present(d, ["frame_hashes", "video_frame_hashes", "media.frame_hashes", "video.frame_hashes"]))
+                    phash = _clean(_first_present(d, PHASH_FIELDS))
+                    frame_hashes = _parse_frame_hashes(_first_present(d, FRAME_HASH_FIELDS))
                     media_type = _guess_media_type(d, phash, frame_hashes)
+                    command = _clean(d.get("command_name")) or default_command
                     item = ItemSnapshot(
                         collection=collection,
                         command=command,
                         name=name,
-                        card_id=_first_present(d, ["card_id", "item_id", "character_id", "id"]),
-                        rarity=_first_present(d, ["rarity", "rank", "tier", "class", "category"]),
+                        card_id=_clean(_first_present(d, ID_FIELDS)),
+                        rarity=_clean(_first_present(d, RARITY_FIELDS)),
+                        anime_name=_clean(_first_present(d, ANIME_FIELDS)),
                         media_type=media_type,
-                        file_unique_id=_first_present(d, ["file_unique_id", "photo_file_unique_id", "video_file_unique_id", "media_file_unique_id", "media.file_unique_id", "photo.file_unique_id", "video.file_unique_id"]),
-                        sha256=_first_present(d, ["sha256", "media_sha256", "file_sha256", "hash", "media.hash"]),
+                        file_unique_id=_clean(_first_present(d, FILE_UID_FIELDS)),
+                        sha256=_clean(_first_present(d, SHA_FIELDS)),
                         phash=phash,
                         frame_hashes=frame_hashes,
                     )
@@ -189,10 +163,10 @@ class SnapshotCache:
                     total += 1
 
                     if item.file_unique_id:
-                        new_file_uid[item.file_unique_id] = item
+                        new_file_uid.setdefault(item.file_unique_id, item)
                         new_file_uid_by_col.setdefault(collection, {})[item.file_unique_id] = item
                     if item.sha256:
-                        new_sha256[item.sha256] = item
+                        new_sha256.setdefault(item.sha256, item)
                         new_sha256_by_col.setdefault(collection, {})[item.sha256] = item
                     if item.phash or media_type == "photo":
                         new_photos.setdefault(collection, []).append(item)
@@ -203,6 +177,8 @@ class SnapshotCache:
             new_by_collection[collection] = docs
             new_file_uid_by_col.setdefault(collection, {})
             new_sha256_by_col.setdefault(collection, {})
+            new_photos.setdefault(collection, [])
+            new_videos.setdefault(collection, [])
 
         async with self._lock:
             self.by_collection = new_by_collection
