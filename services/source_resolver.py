@@ -57,6 +57,7 @@ LOOKUP_COLLECTION_ORDER: list[str] = [
     "items_senpai_catcher",
     "items_super_zeko",
     "items_orinx_waifu",
+    "items_immortal_donghua",
 ]
 
 COMMAND_TO_COLLECTIONS: dict[str, list[str]] = {
@@ -71,6 +72,7 @@ COMMAND_TO_COLLECTIONS: dict[str, list[str]] = {
     "/bika": ["items_bika_character"],
     "/ziceko": ["items_super_zeko"],
     "/orin": ["items_orinx_waifu"],
+    "/dao": ["items_immortal_donghua"],
     "/pick": ["items_character_picker", "items_senpai_catcher"],
     "/grab": [
         "items_husbando_grabber",
@@ -167,6 +169,9 @@ TITLE_SOURCE_COLLECTION: dict[str, str] = {
     "orinx waifu bot": "items_orinx_waifu",
     "orinx catcher waifu bot": "items_orinx_waifu",
     "timunagalaya": "items_orinx_waifu",
+    "immortal donghua": "items_immortal_donghua",
+    "immortal donghua bot": "items_immortal_donghua",
+    "immortaldonghuabot": "items_immortal_donghua",
 }
 
 TITLE_OUTPUT_COMMAND: dict[str, str] = {
@@ -191,6 +196,9 @@ TITLE_OUTPUT_COMMAND: dict[str, str] = {
     "orinx waifu bot": "/orin",
     "orinx catcher waifu bot": "/orin",
     "timunagalaya": "/orin",
+    "immortal donghua": "/dao",
+    "immortal donghua bot": "/dao",
+    "immortaldonghuabot": "/dao",
 }
 
 CONTENT_SOURCE_RULES: list[tuple[re.Pattern[str], str, str | None]] = [
@@ -202,6 +210,8 @@ CONTENT_SOURCE_RULES: list[tuple[re.Pattern[str], str, str | None]] = [
     (re.compile(r"character\s+database.*\bid\b\s*[:：].*\bname\b\s*[:：].*\bseries\b\s*[:：].*\brarity\b\s*[:：].*\bexported\b", re.I | re.S), "items_orinx_waifu", "/orin"),
     # Super Zeko / Myanmar Character logs.
     (re.compile(r"card\s+drop|myanmar\s+character|/ziceko|တင်ပြီးပြီ|uploaded\s*\(/?li\)|📛.*name|⭐.*rarity", re.I | re.S), "items_super_zeko", "/ziceko"),
+    # Immortal Donghua DB captions.
+    (re.compile(r"(?:saved|updated).*\bname\b\s*[:：].*\bid\b\s*[:：].*\brarity\b\s*[:：].*\banime\b\s*[:：]", re.I | re.S), "items_immortal_donghua", "/dao"),
 ]
 
 
