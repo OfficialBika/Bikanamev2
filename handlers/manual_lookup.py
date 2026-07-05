@@ -17,7 +17,7 @@ router = Router(name="manual_lookup")
 
 # Keep /name commands, plus unique source commands that are safe for scoped manual lookup.
 MANUAL_RE = re.compile(
-    r"^(?P<cmd>/waifu|/w|\.wa|\.w|/name|\.name|/loot|/bika|/pick|/ziceko|/orin)"
+    r"^(?P<cmd>/waifu|/w|\.wa|\.w|/name|\.name|/loot|/bika|/pick|/ziceko|/orin|/dao)"
     r"(?:@(?P<bot>[A-Za-z0-9_]+))?"
     r"(?:\s|$)",
     re.I,

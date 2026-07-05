@@ -40,6 +40,7 @@ SUPPORTED_BOTS = [
     ("@SenpaiCatcherBot", "/pick"),
     ("@Super_zeko_bot", "/ziceko"),
     ("@orinx_catcher_waifu_bot", "/orin"),
+    ("@ImmortalDonghuaBot", "/dao"),
 ]
 
 
