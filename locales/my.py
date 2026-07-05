@@ -14,4 +14,4 @@ NO_MEDIA = "🇲🇲 Media ကို reply ပြန်ပြီး command သ�
 NOT_APPROVED = "🇲🇲 ဒီ group မှာ auto lookup မဖွင့်ထားသေးပါ။ Owner/Sudo က /gapprove လုပ်ပေးရပါမယ်။"
 JOIN_OK = "🇲🇲 Join စစ်ပြီးပါပြီ။ Bot ကိုအသုံးပြုနိုင်ပါပြီ။"
 JOIN_FAIL = "🇲🇲 Join မပြီးသေးပါ။ Channel/Group တွေ join ပြီးမှ ပြန်စစ်ပါ။"
-BLOCKED_SOURCE = "🇲🇲 ဒီ Bot ကို ဘမ်းထားပါတယ်\nအကြောင်းအရင်း ; သူခိုးဘော့"
+BLOCKED_SOURCE = "🇲🇲 ဒီ Bot ကို ဘမ်းထားပါတယ်"
