@@ -1,4 +1,4 @@
-START_TEXT = """🇲🇲 မင်္ဂလာပါ။ Donghua Cheat Bot V2 မှ ကြိုဆိုပါတယ်။
+START_TEXT = """🇲🇲 မင်္ဂလာပါ။ Donghua Cheat Bot မှ ကြိုဆိုပါတယ်။
 
 အသုံးပြုနည်း:
 • Group ထဲမှာ photo/video ပို့ရင် auto lookup လုပ်ပေးပါမယ်။
