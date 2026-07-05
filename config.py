@@ -86,6 +86,7 @@ COLLECTION_TO_OUTPUT_COMMAND: Dict[str, str] = {
     "items_senpai_catcher": "/pick",
     "items_super_zeko": "/ziceko",
     "items_orinx_waifu": "/orin",
+    "items_immortal_donghua": "/dao",
     "items_unknown": "/name",
 }
 
@@ -103,6 +104,7 @@ COMMAND_TO_COLLECTION: Dict[str, str] = {
     "/bika": "items_bika_character",
     "/ziceko": "items_super_zeko",
     "/orin": "items_orinx_waifu",
+    "/dao": "items_immortal_donghua",
 }
 
 # Username/channel username -> exact source collection.
@@ -136,6 +138,7 @@ BOT_SOURCE_COLLECTION: Dict[str, str] = {
     "@zicekodata_1": "items_super_zeko",
     "@orinx_catcher_waifu_bot": "items_orinx_waifu",
     "@timunagalaya": "items_orinx_waifu",
+    "@immortaldonghuabot": "items_immortal_donghua",
 }
 
 # Strong source channel IDs. This is the most reliable way when Telegram hides usernames/titles.
@@ -190,6 +193,8 @@ BOT_SOURCE_USER_ID: Dict[int, str] = {
     8534437620: "items_super_zeko",
     # OrinX Waifu Bot / @orinx_catcher_waifu_bot
     8685992652: "items_orinx_waifu",
+    # Immortal Donghua Bot / @ImmortalDonghuaBot
+    8928030201: "items_immortal_donghua",
 }
 
 # Username/title-specific output command overrides.
@@ -199,6 +204,7 @@ BOT_SOURCE_OUTPUT_COMMAND: Dict[str, str] = {
     "@zicekodata_1": "/ziceko",
     "@orinx_catcher_waifu_bot": "/orin",
     "@timunagalaya": "/orin",
+    "@immortaldonghuabot": "/dao",
 }
 
 # Strong source bot/user IDs that need command override.
@@ -206,6 +212,7 @@ BOT_SOURCE_OUTPUT_USER_ID: Dict[int, str] = {
     8359842815: "/loot",   # Character Looter Bot uses capture collection, output /loot
     8534437620: "/ziceko", # Myanmar Character
     8685992652: "/orin",   # OrinX Waifu Bot
+    8928030201: "/dao",    # Immortal Donghua Bot
 }
 
 # These commands should return only name/hint/full; ID and rarity are intentionally hidden.
