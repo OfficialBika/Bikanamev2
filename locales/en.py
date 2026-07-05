@@ -1,4 +1,4 @@
-START_TEXT = """🇬🇧 Welcome to Waifu Name Bot V2.
+START_TEXT = """🇬🇧 Welcome to Donghua Cheat Bot .
 
 How to use:
 • Send photo/video in an approved group for auto lookup.
