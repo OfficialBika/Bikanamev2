@@ -110,8 +110,9 @@ class LookupService:
                     hit = True
                     return self._done(self._with_command(cached, output_command), "cache", t0)
 
-                # Source-aware exact UID lookup.
-                item = self._lookup_uid(file_uid, collections or None)
+                # Source-aware exact UID lookup. Auto lookup is NEVER
+                # allowed to turn an unknown source into a global search.
+                item = self._lookup_uid(file_uid, collections)
                 if item:
                     hit = True
                     self.result_cache.set(cache_key, item)
