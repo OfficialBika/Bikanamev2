@@ -179,9 +179,19 @@ class LookupService:
         if collection_filter:
             by_col = snapshot.file_uid_by_collection
             for collection in collection_filter:
-                item = by_col.get(collection, {}).get(file_uid)
-                if item:
-                    return item
+                candidates = by_col.get(collection, {}).get(file_uid, ())
+                if len(candidates) == 1:
+                    return candidates[0]
+                if len(candidates) > 1:
+                    names = {x.name for x in candidates}
+                    if len(names) == 1:
+                        return candidates[0]
+                    log.warning(
+                        "ambiguous scoped UID: collection=%s uid=%s candidates=%s",
+                        collection,
+                        file_uid,
+                        len(candidates),
+                    )
             return None
 
         return self._lookup_global_uid(file_uid)
