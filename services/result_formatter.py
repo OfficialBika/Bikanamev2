@@ -3,10 +3,10 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 try:
     from aiogram.types import CopyTextButton
-except Exception:  # older aiogram fallback
+except Exception:
     CopyTextButton = None  # type: ignore
 
-from config import HIDE_ID_RARITY_COMMANDS, settings
+from config import settings
 from services.snapshot_cache import ItemSnapshot
 from utils.text import first_token, h
 
@@ -19,23 +19,14 @@ def _copy_button(text: str, value: str) -> InlineKeyboardButton:
 
 def format_result(item: ItemSnapshot) -> str:
     command = item.command or "/name"
-    hide_id_rarity = command in HIDE_ID_RARITY_COMMANDS
-
-    lines = [f"<b>NAME :</b> <code>{h(item.name)}</code>"]
-    if item.card_id is not None and not hide_id_rarity:
-        lines.append(f"<b>ID :</b> {h(item.card_id)}")
-    if item.rarity and not hide_id_rarity:
-        lines.append(f"<b>RARITY :</b> {h(item.rarity)}")
-    if settings.show_source_in_result:
-        lines.append(f"<b>SOURCE :</b> {h(command)}")
-
-    hint = f"{command} {first_token(item.name)}"
-    full = f"{command} {item.name}"
-    lines += [
+    lines = [
+        f"<b>NAME :</b> <code>{h(item.name)}</code>",
         "────────────────",
-        f"🔹 <b>Hint :</b> <code>{h(hint)}</code>",
-        f"🔸 <b>Full :</b> <code>{h(full)}</code>",
+        f"🔹 <b>Hint :</b> <code>{h(command + ' ' + first_token(item.name))}</code>",
+        f"🔸 <b>Full :</b> <code>{h(command + ' ' + item.name)}</code>",
     ]
+    if settings.show_source_in_result:
+        lines.insert(1, f"<b>SOURCE :</b> <code>{h(command)}</code>")
     if settings.owner_username:
         owner = settings.owner_username if settings.owner_username.startswith("@") else "@" + settings.owner_username
         username = owner.lstrip("@")
@@ -49,4 +40,7 @@ def result_buttons(item: ItemSnapshot) -> InlineKeyboardMarkup | None:
     command = item.command or "/name"
     hint = f"{command} {first_token(item.name)}"
     full = f"{command} {item.name}"
-    return InlineKeyboardMarkup(inline_keyboard=[[_copy_button("📋 Copy Hint", hint), _copy_button("📋 Copy Full", full)]])
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        _copy_button("📋 Copy Hint", hint),
+        _copy_button("📋 Copy Full", full),
+    ]])
