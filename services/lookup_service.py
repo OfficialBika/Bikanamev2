@@ -87,9 +87,22 @@ class LookupService:
                     if manual_scope.collections:
                         collections = list(manual_scope.collections)
 
+                file_uids: list[str] = []
+                if media.media_type == "photo":
+                    for photo_size in (getattr(source_message, "photo", None) or []):
+                        uid_value = str(getattr(photo_size, "file_unique_id", "") or "").strip()
+                        if uid_value and uid_value not in file_uids:
+                            file_uids.append(uid_value)
+
                 file_uid = str(getattr(media.obj, "file_unique_id", "") or "").strip()
-                if not file_uid:
+                if file_uid and file_uid not in file_uids:
+                    file_uids.append(file_uid)
+                if not file_uids:
                     return self._done(None, "no_file_unique_id", t0)
+
+                # The cache key uses the exact UID selected by Telegram for
+                # this message; photo lookup below checks every PhotoSize UID.
+                primary_uid = file_uid or file_uids[0]
 
                 output_command = output_command_from_message(
                     source_message,
@@ -102,7 +115,7 @@ class LookupService:
                     )
 
                 filter_tag = "+".join(collections) if collections else "global"
-                cache_key = f"uid:{filter_tag}:{file_uid}"
+                cache_key = f"uid:{filter_tag}:{primary_uid}"
 
                 # Result cache ONLY. A failed lookup is never cached.
                 # Auto lookup may read cache only inside a resolved source scope.
@@ -117,7 +130,7 @@ class LookupService:
                             and not collections
                             and any(
                                 x.collection == cached.collection and x.name == cached.name
-                                for x in snapshot.file_uid.get(file_uid, ())
+                                for x in snapshot.file_uid.get(primary_uid, ())
                             )
                         )
                     )
@@ -128,21 +141,21 @@ class LookupService:
 
                 # Source-aware exact UID lookup. Auto lookup is NEVER
                 # allowed to turn an unknown source into a global search.
-                item = self._lookup_uid(file_uid, collections)
+                item = self._lookup_uid(primary_uid, collections)
                 if item:
                     hit = True
                     self.result_cache.set(cache_key, item)
                     # Also keep a global result-cache entry only for an
                     # unambiguous exact UID.
                     if not collections:
-                        self.result_cache.set(f"uid:global:{file_uid}", item)
+                        self.result_cache.set(f"uid:global:{primary_uid}", item)
                     return self._done(self._with_command(item, output_command), "uid", t0)
 
                 # IMPORTANT: only manual lookup is allowed to use global UID
                 # fallback when the source cannot be resolved. Auto lookup
                 # remains source-scoped and never becomes a global search.
                 if manual and not collections:
-                    global_item = self._lookup_global_uid(file_uid)
+                    global_item = self._lookup_global_uid(primary_uid)
                     if global_item:
                         hit = True
                         self.result_cache.set(cache_key, global_item)
