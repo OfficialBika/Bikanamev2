@@ -105,8 +105,24 @@ class LookupService:
                 cache_key = f"uid:{filter_tag}:{file_uid}"
 
                 # Result cache ONLY. A failed lookup is never cached.
+                # Auto lookup may read cache only inside a resolved source scope.
+                # Manual lookup may read an unambiguous global UID cache.
                 cached = self.result_cache.get(cache_key)
-                if cached and (not collections or cached.collection in collections):
+                cached_is_current = bool(
+                    cached
+                    and (
+                        (collections and cached.collection in collections)
+                        or (
+                            manual
+                            and not collections
+                            and any(
+                                x.collection == cached.collection and x.name == cached.name
+                                for x in snapshot.file_uid.get(file_uid, ())
+                            )
+                        )
+                    )
+                )
+                if cached and cached_is_current:
                     hit = True
                     return self._done(self._with_command(cached, output_command), "cache", t0)
 
@@ -194,7 +210,9 @@ class LookupService:
                     )
             return None
 
-        return self._lookup_global_uid(file_uid)
+        # Unknown source: do not allow auto lookup to search globally.
+        # Manual lookup performs its explicit global fallback in lookup_message().
+        return None
 
     def _lookup_global_uid(self, file_uid: str) -> ItemSnapshot | None:
         candidates = snapshot.file_uid.get(file_uid, ())
