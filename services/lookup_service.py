@@ -141,32 +141,36 @@ class LookupService:
 
                 # Source-aware exact UID lookup. Auto lookup is NEVER
                 # allowed to turn an unknown source into a global search.
-                item = self._lookup_uid(primary_uid, collections)
-                if item:
-                    hit = True
-                    self.result_cache.set(cache_key, item)
-                    # Also keep a global result-cache entry only for an
-                    # unambiguous exact UID.
-                    if not collections:
-                        self.result_cache.set(f"uid:global:{primary_uid}", item)
-                    return self._done(self._with_command(item, output_command), "uid", t0)
+                # For photos, try every PhotoSize UID Telegram supplied.
+                for candidate_uid in file_uids:
+                    item = self._lookup_uid(candidate_uid, collections)
+                    if item:
+                        hit = True
+                        self.result_cache.set(
+                            f"uid:{filter_tag}:{candidate_uid}",
+                            item,
+                        )
+                        return self._done(self._with_command(item, output_command), "uid", t0)
 
                 # IMPORTANT: only manual lookup is allowed to use global UID
-                # fallback when the source cannot be resolved. Auto lookup
-                # remains source-scoped and never becomes a global search.
+                # fallback when the source cannot be resolved.
                 if manual and not collections:
-                    global_item = self._lookup_global_uid(primary_uid)
-                    if global_item:
-                        hit = True
-                        self.result_cache.set(cache_key, global_item)
-                        return self._done(
-                            self._with_command(
+                    for candidate_uid in file_uids:
+                        global_item = self._lookup_global_uid(candidate_uid)
+                        if global_item:
+                            hit = True
+                            self.result_cache.set(
+                                f"uid:global:{candidate_uid}",
                                 global_item,
-                                output_command or global_item.command,
-                            ),
-                            "global_uid",
-                            t0,
-                        )
+                            )
+                            return self._done(
+                                self._with_command(
+                                    global_item,
+                                    output_command or global_item.command,
+                                ),
+                                "global_uid",
+                                t0,
+                            )
 
                 return self._done(
                     None,
