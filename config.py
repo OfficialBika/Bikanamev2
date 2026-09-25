@@ -276,9 +276,9 @@ class Settings:
     snapshot_refresh_seconds: int = _int("SNAPSHOT_REFRESH_SECONDS", 300)
     snapshot_startup_load: bool = _bool("SNAPSHOT_STARTUP_LOAD", True)
     snapshot_background_refresh: bool = _bool("SNAPSHOT_BACKGROUND_REFRESH", True)
-    result_cache_max_items: int = _int("RESULT_CACHE_MAX_ITEMS", 150000)
-    result_cache_ttl_seconds: int = _int("RESULT_CACHE_TTL_SECONDS", 7200)
-    miss_cache_ttl_seconds: int = _int("MISS_CACHE_TTL_SECONDS", 300)
+    result_cache_max_items: int = _int("RESULT_CACHE_MAX_ITEMS", 30000)
+    result_cache_ttl_seconds: int = _int("RESULT_CACHE_TTL_SECONDS", 3600)
+    miss_cache_ttl_seconds: int = 0  # Disabled: misses are never cached.
 
     photo_phash_threshold: int = _int("PHOTO_PHASH_THRESHOLD", 8)
     # Waifux/Grab Garden often reuses the same visual media with different Telegram file IDs
@@ -299,8 +299,8 @@ class Settings:
     strict_command_lookup: bool = _bool("STRICT_COMMAND_LOOKUP", True)
     fallback_all_on_strict_miss: bool = _bool("FALLBACK_ALL_ON_STRICT_MISS", False)
     require_lookup_scope: bool = _bool("REQUIRE_LOOKUP_SCOPE", True)
-    strict_exact_lookup_only: bool = _bool("STRICT_EXACT_LOOKUP_ONLY", False)
-    enable_hash_fallback: bool = _bool("ENABLE_HASH_FALLBACK", True)
+    strict_exact_lookup_only: bool = _bool("STRICT_EXACT_LOOKUP_ONLY", True)
+    enable_hash_fallback: bool = _bool("ENABLE_HASH_FALLBACK", False)
 
     auto_lookup_reply_not_found: bool = _bool("AUTO_LOOKUP_REPLY_NOT_FOUND", True)
     auto_lookup_dedupe_album: bool = _bool("AUTO_LOOKUP_DEDUPE_ALBUM", False)
