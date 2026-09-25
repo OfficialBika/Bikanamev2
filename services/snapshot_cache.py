@@ -70,7 +70,7 @@ class SnapshotCache:
 
         # Only minimal records are retained.
         self.by_collection: Dict[str, tuple[ItemSnapshot, ...]] = {}
-        self.file_uid_by_collection: Dict[str, Dict[str, ItemSnapshot]] = {}
+        self.file_uid_by_collection: Dict[str, Dict[str, tuple[ItemSnapshot, ...]]] = {}
 
         # Global UID keeps ALL exact matches instead of silently overwriting
         # duplicate UIDs from different sources.
@@ -79,7 +79,7 @@ class SnapshotCache:
     async def refresh(self) -> None:
         db = get_db()
         new_by_collection: Dict[str, tuple[ItemSnapshot, ...]] = {}
-        new_by_col: Dict[str, Dict[str, ItemSnapshot]] = {}
+        new_by_col: Dict[str, Dict[str, list[ItemSnapshot]]] = {}
         global_lists: Dict[str, list[ItemSnapshot]] = {}
 
         # Mongo sends only name + command + UID fields.
@@ -87,6 +87,7 @@ class SnapshotCache:
             "_id": 0,
             "name": 1,
             "command_name": 1,
+            "command": 1,
             "file_unique_id": 1,
             "telegram_file_unique_id": 1,
             "file_unique_ids": 1,
@@ -113,7 +114,7 @@ class SnapshotCache:
                         # the exact fast path, so do not put it into RAM.
                         continue
 
-                    command = str(d.get("command_name") or default_command).strip() or default_command
+                    command = str(d.get("command_name") or d.get("command") or default_command).strip() or default_command
                     item = ItemSnapshot(
                         collection=collection,
                         command=command,
@@ -125,7 +126,7 @@ class SnapshotCache:
 
                     scoped = new_by_col.setdefault(collection, {})
                     for uid in uids:
-                        scoped.setdefault(uid, item)
+                        scoped.setdefault(uid, []).append(item)
                         global_lists.setdefault(uid, []).append(item)
                         uid_count += 1
 
@@ -150,7 +151,13 @@ class SnapshotCache:
 
         async with self._lock:
             self.by_collection = new_by_collection
-            self.file_uid_by_collection = new_by_col
+            self.file_uid_by_collection = {
+                collection: {
+                    uid: tuple(items)
+                    for uid, items in values.items()
+                }
+                for collection, values in new_by_col.items()
+            }
             self.file_uid = new_global
             self.loaded_at = time.time()
             self.count = total
